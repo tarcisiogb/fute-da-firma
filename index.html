@@ -57,6 +57,7 @@ header.top{display:flex;align-items:center;gap:12px;padding:20px 4px 4px}
 .badge.adm{background:var(--grass-soft);color:var(--grass-deep)}
 .badge.mens{background:var(--grass);color:#fff}
 .badge.semcob{background:#eef1ee;color:var(--ink-soft)}
+.badge.isento{background:#eaf3ee;color:var(--grass-deep);border:1px solid #bfe0cb}
 .badge.pend{background:var(--amber-soft);color:var(--amber)}
 .badge.inativo{background:var(--red-soft);color:var(--red)}
 .badge.pos{background:var(--grass-soft);color:var(--grass-deep);font-weight:700}
@@ -177,6 +178,19 @@ h2.ph{font-family:'Archivo',sans-serif;font-weight:800;font-size:21px;margin-bot
 
 .overlay{position:fixed;inset:0;background:rgba(10,26,18,.55);z-index:90;display:flex;align-items:center;justify-content:center;padding:20px}
 .modal{background:#fff;border-radius:18px;padding:24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.clickav{cursor:pointer}
+.modal.pcard{max-width:340px;text-align:center;padding:28px 24px 24px;position:relative}
+.pclose{position:absolute;top:10px;right:12px;background:none;border:none;font-size:20px;line-height:1;color:var(--ink-soft);cursor:pointer;width:auto;padding:6px}
+.pbig{width:150px;height:150px;border-radius:24px;margin:4px auto 14px;background:var(--grass-soft);color:var(--grass-deep);font-family:'Archivo',sans-serif;font-weight:900;font-size:52px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.pbig img{width:100%;height:100%;object-fit:cover;display:block}
+.pcname{font-family:'Archivo',sans-serif;font-weight:800;font-size:22px;line-height:1.1}
+.pcsub{color:var(--ink-soft);font-size:14px;margin-top:3px}
+.pcbadges{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;margin:12px 0 6px}
+.pcstars{margin-bottom:14px}
+.pcgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;text-align:left}
+.pccell{background:var(--grass-soft);border-radius:12px;padding:10px 12px}
+.pccell .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--grass-deep);font-weight:700}
+.pccell .v{font-weight:700;font-size:15px;margin-top:2px}
 .modal h3{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;margin-bottom:8px}
 .modal p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-bottom:18px}
 .modal input{width:100%;padding:12px 14px;font-size:15px;border:1px solid var(--line);border-radius:11px;margin-bottom:18px}
@@ -275,7 +289,7 @@ var demoPlayers = [
   { id:"u_master", provider:"senha", email:"master@fute", senha:"123456", nome:"Tarcísio", apelido:"Capitão", telefone:"(11) 90000-0001", foto:null, posPrincipal:"meio", posSecundaria:"ataque", area:"iCarros", supt:"Tarcísio", role:"master", status:"aprovado", mensalista:true, ativo:true, autoavaliacao:4 },
   { id:"u_adm", provider:"senha", email:"adm@fute", senha:"123456", nome:"Ricardo Alves", apelido:"Ricardão", telefone:"(11) 90000-0002", foto:null, posPrincipal:"zaga", posSecundaria:"meio", area:"TAG", supt:"Rafa Tavolaro", role:"adm", status:"aprovado", mensalista:true, ativo:true, autoavaliacao:4 },
   { id:"u_bruno", provider:"senha", email:"joga@fute", senha:"123456", nome:"Bruno Costa", apelido:"Bruninho", telefone:"(11) 90000-0003", foto:null, posPrincipal:"ataque", posSecundaria:"meio", area:"Cartões", supt:"João Seixas", role:"jogador", status:"aprovado", mensalista:true, ativo:true, autoavaliacao:5 },
-  { id:"u_diego", provider:"senha", email:"diego@fute", senha:"123456", nome:"Diego Ramos", apelido:"Paredão", telefone:"(11) 90000-0004", foto:null, posPrincipal:"goleiro", posSecundaria:null, area:"Itaú Shop", supt:"Thomaz", role:"jogador", status:"aprovado", mensalista:true, ativo:true, autoavaliacao:3 },
+  { id:"u_diego", provider:"senha", email:"diego@fute", senha:"123456", nome:"Diego Ramos", apelido:"Paredão", telefone:"(11) 90000-0004", foto:null, posPrincipal:"goleiro", posSecundaria:null, area:"Itaú Shop", supt:"Thomaz", role:"jogador", status:"aprovado", mensalista:true, isento:true, ativo:true, autoavaliacao:3 },
   { id:"u_lucas", provider:"google", email:"lucas@gmail.com", senha:null, nome:"Lucas Vidal", apelido:"Luca", telefone:"(11) 90000-0008", foto:null, posPrincipal:"meio", posSecundaria:"ataque", area:"Parcerias", supt:"João Seixas", role:"jogador", status:"aprovado", mensalista:true, ativo:true, autoavaliacao:4 },
   { id:"u_paulo", provider:"senha", email:"paulo@fute", senha:"123456", nome:"Paulo Mendes", apelido:"Paulinho", telefone:"(11) 90000-0005", foto:null, posPrincipal:"meio", posSecundaria:"ataque", area:"iCarros", supt:"Tarcísio", role:"jogador", status:"aprovado", mensalista:false, ativo:true, autoavaliacao:3 },
   { id:"u_andre", provider:"senha", email:"andre@fute", senha:"123456", nome:"André Lima", apelido:"Dedé", telefone:"(11) 90000-0006", foto:null, posPrincipal:"zaga", posSecundaria:"meio", area:"Cartões", supt:"Rafa Tavolaro", role:"jogador", status:"pendente", mensalista:false, ativo:true, autoavaliacao:3 },
@@ -399,7 +413,7 @@ function authLogin(email, senha){
   }
   return {erro:"Firebase ainda não configurado."};
 }
-function novoBase(){ return { role:"jogador", status:"pendente", mensalista:false, ativo:true, autoavaliacao:3, foto:null }; }
+function novoBase(){ return { role:"jogador", status:"pendente", mensalista:false, isento:false, ativo:true, autoavaliacao:3, foto:null }; }
 function authRegister(d){ if(DEMO){ if(dbEmailExists(d.email)) return {erro:"Já existe um cadastro com esse e-mail."}; var n=novoBase(); n.id="u_"+Date.now(); n.provider="senha"; n.email=d.email.trim(); n.senha=d.senha; n.nome=d.nome.trim(); n.apelido=d.apelido.trim(); n.telefone=(d.tel||"").trim(); n.posPrincipal=d.princ; n.posSecundaria=d.sec||null; n.area=d.area; n.supt=d.supt; demoPlayers.push(n); return {player:n}; } return {erro:"Firebase ainda não configurado."}; }
 function authRegisterGoogle(d){ if(DEMO){ if(dbEmailExists(d.email)) return {erro:"Essa conta Google já tem cadastro."}; var n=novoBase(); n.id="u_"+Date.now(); n.provider="google"; n.email=d.email.trim(); n.senha=null; n.nome=d.nome.trim(); n.apelido=d.apelido.trim(); n.telefone=(d.tel||"").trim(); n.foto=d.foto||null; n.posPrincipal=d.princ; n.posSecundaria=d.sec||null; n.area=d.area; n.supt=d.supt; demoPlayers.push(n); return {player:n}; } return {erro:"Firebase ainda não configurado."}; }
 
@@ -454,6 +468,7 @@ function parseBRNum(s){ if(!s) return 0; s=String(s).replace(/[^0-9,.-]/g,"").re
 function esc(s){ s=(s==null?"":String(s)); return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
 function initials(nome){ var p=(nome||"?").trim().split(/\s+/); var a=p[0]?p[0][0]:"?"; var b=p.length>1?p[p.length-1][0]:""; return (a+b).toUpperCase(); }
 function avatarInner(p){ if(p&&p.foto) return '<img src="'+p.foto+'" alt="">'; return esc(initials(p?p.nome:"?")); }
+function avatarTag(p, cls){ return '<div class="'+cls+' clickav" data-action="view-player" data-id="'+(p&&p.id?esc(p.id):"")+'">'+avatarInner(p)+'</div>'; }
 function primeiroNome(nome){ return (nome||"").trim().split(/\s+/)[0]||""; }
 function nomeExibTxt(p){ var ap=p.apelido||p.nome||"", pn=primeiroNome(p.nome); if(ap && pn && ap.toLowerCase().indexOf(pn.toLowerCase())<0) return ap+" ("+pn+")"; return ap; }
 function nomeExib(p){ var ap=p.apelido||p.nome||"", pn=primeiroNome(p.nome); if(ap && pn && ap.toLowerCase().indexOf(pn.toLowerCase())<0) return esc(ap)+' <span class="muted" style="font-weight:500">('+esc(pn)+')</span>'; return esc(ap); }
@@ -564,7 +579,7 @@ function renderAuth(){
    RENDER — APP
    ===================================================================== */
 function roleBadge(u){ if(u.role==="master") return '<span class="badge master">Master</span>'; if(u.role==="adm") return '<span class="badge adm">Adm</span>'; return ""; }
-function statusBadges(u){ if(u.status==="pendente") return '<span class="badge pend">Pendente</span>'; var b=""; if(!u.ativo) b+='<span class="badge inativo">Inativo</span> '; b+=u.mensalista?'<span class="badge mens">Mensalista</span>':'<span class="badge semcob">Sem cobrança</span>'; return b; }
+function statusBadges(u){ if(u.status==="pendente") return '<span class="badge pend">Pendente</span>'; var b=""; if(!u.ativo) b+='<span class="badge inativo">Inativo</span> '; b+=u.isento?'<span class="badge isento">Isento</span>':(u.mensalista?'<span class="badge mens">Mensalista</span>':'<span class="badge semcob">Sem cobrança</span>'); return b; }
 function renderHeader(u){
   var h=['<header class="top">'+crest("crest")];
   h.push('<div class="brand"><span class="fw">Fute <span class="hl">da firma</span></span></div>');
@@ -589,7 +604,9 @@ function renderTabs(){
 
 function mensalidadeCard(u){
   var h=['<div class="panel"><div class="eyebrow">Mensalidade</div>'];
-  if(u.mensalista){
+  if(u.isento){
+    h.push('<div style="margin-top:4px"><span class="badge isento">Isento</span> <span class="muted">você não paga mensalidade.</span></div>');
+  } else if(u.mensalista){
     var mes=todayKey(), mn=dbMens(u.id,mes), pg=!!(mn&&mn.pago), cfg=dbConfig();
     h.push('<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:4px"><div><div style="font-weight:700;font-size:15px;text-transform:capitalize">'+esc(mesLabel(mes))+'</div>');
     h.push('<div style="margin-top:5px">'+(pg?'<span class="badge mens">Pago</span>':'<span class="badge pend">Em aberto</span> <span class="muted">'+formatBRL(cfg.valorMensalidade)+'</span>')+'</div></div>');
@@ -600,7 +617,7 @@ function mensalidadeCard(u){
 }
 function renderInicio(u){
   var h=['<div class="panel pitch">'];
-  h.push('<div class="pfhead"><div class="pfav">'+avatarInner(u)+'</div><div>');
+  h.push('<div class="pfhead">'+avatarTag(u,"pfav")+'<div>');
   h.push('<div style="font-family:Archivo,sans-serif;font-weight:800;font-size:22px">'+nomeExib(u)+'</div>');
   h.push('<div class="muted" style="margin-top:2px">'+esc(u.nome)+'</div>');
   h.push('<div style="margin-top:8px">'+roleBadge(u)+' '+statusBadges(u)+'</div></div></div>');
@@ -645,12 +662,13 @@ function renderCadastro(u){
 }
 
 function playerRow(p, mode){
-  var h=['<div class="prow"><div class="pav">'+avatarInner(p)+'</div>'];
+  var h=['<div class="prow">'+avatarTag(p,"pav")+''];
   h.push('<div class="pinfo"><div class="pname">'+esc(p.apelido||p.nome)+' <small>'+esc(p.nome)+'</small></div>');
   h.push('<div class="pmeta">'+roleBadge(p)+' '+statusBadges(p)+(p.provider==="google"?' <span class="badge google">Google</span>':"")+' '+posPairBadges(p)+' '+starsDisplay(notaInfo(p).value)+'</div>'+areaSuptLine(p)+'</div><div class="pacts">');
   if(mode==="pendente"){ h.push('<button class="btn mini ok" data-action="approve" data-id="'+p.id+'">Aprovar</button><button class="btn mini danger" data-action="reject" data-id="'+p.id+'">Recusar</button>'); }
-  else if(p.role==="master"){ h.push('<span class="badge master">você</span> <button class="btn mini ghost" data-action="toggle-mens" data-id="'+p.id+'">'+(p.mensalista?"Sem cobrança":"Tornar mensalista")+'</button>'); }
+  else if(p.role==="master"){ h.push('<span class="badge master">você</span> <button class="btn mini ghost" data-action="toggle-mens" data-id="'+p.id+'">'+(p.mensalista?"Sem cobrança":"Tornar mensalista")+'</button>'); if(p.mensalista) h.push('<button class="btn mini ghost" data-action="toggle-isento" data-id="'+p.id+'">'+(p.isento?"Cobrar":"Isentar")+'</button>'); }
   else { h.push('<button class="btn mini ghost" data-action="toggle-mens" data-id="'+p.id+'">'+(p.mensalista?"Sem cobrança":"Tornar mensalista")+'</button>');
+         if(p.mensalista) h.push('<button class="btn mini ghost" data-action="toggle-isento" data-id="'+p.id+'">'+(p.isento?"Cobrar":"Isentar")+'</button>');
          h.push('<button class="btn mini ghost" data-action="toggle-ativo" data-id="'+p.id+'">'+(p.ativo?"Inativar":"Reativar")+'</button>');
          if(amMaster()) h.push('<button class="btn mini ghost" data-action="toggle-adm" data-id="'+p.id+'">'+(p.role==="adm"?"Remover Adm":"Tornar Adm")+'</button>'); }
   h.push('</div></div>'); return h.join("");
@@ -670,7 +688,7 @@ function renderAdmin(){
 function renderTesouraria(){
   var cfg=dbConfig(); if(!S.tesMes) S.tesMes=todayKey(); var mes=S.tesMes;
   var cx=caixaTotais(), mt=mesTotais(mes);
-  var all=dbAllPlayers(), mensalistas=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.mensalista && p.status==="aprovado") mensalistas.push(p); }
+  var all=dbAllPlayers(), mensalistas=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.mensalista && !p.isento && p.status==="aprovado") mensalistas.push(p); }
   var pagos=0; for(var j=0;j<mensalistas.length;j++){ var mn=dbMens(mensalistas[j].id,mes); if(mn&&mn.pago) pagos++; }
   var valor=cfg.valorMensalidade||0;
   var h=[];
@@ -688,7 +706,7 @@ function renderTesouraria(){
   h.push('<div class="subhead" style="margin-top:6px">Mensalidades</div>');
   if(mensalistas.length===0) h.push('<div class="emptymsg">Nenhum mensalista aprovado ainda.</div>');
   for(var k=0;k<mensalistas.length;k++){ var q=mensalistas[k], m2=dbMens(q.id,mes), pg=!!(m2&&m2.pago);
-    h.push('<div class="prow"><div class="pav">'+avatarInner(q)+'</div><div class="pinfo"><div class="pname">'+nomeExib(q)+'</div>');
+    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div>');
     h.push('<div class="pmeta">'+(pg?'<span class="badge mens">Pago</span>':'<span class="badge pend">Em aberto</span>')+(pg&&m2.data?' <span class="muted" style="font-size:11.5px">em '+esc(m2.data)+'</span>':'')+'</div></div>');
     h.push('<div class="pacts"><button class="btn mini '+(pg?"ghost":"ok")+'" data-action="toggle-pago" data-id="'+q.id+'">'+(pg?"Marcar em aberto":"Marcar pago")+'</button></div></div>');
   }
@@ -745,7 +763,7 @@ function renderAcessos(){
   var all=dbAllPlayers(); var h=['<div class="panel"><div class="eyebrow">Só Master</div><h2 class="ph">Acessos e senhas</h2>'];
   if(DEMO) h.push('<div class="warn" style="margin-top:12px"><b>Modo demonstração:</b> a senha aparece porque os dados estão em memória. Com o Firebase real ela fica <b>criptografada</b> — o botão <code>Redefinir</code> envia um link. Contas Google não têm senha no app.</div>');
   for(var i=0;i<all.length;i++){ var p=all[i]; var g=(p.provider==="google");
-    h.push('<div class="acc-row"><div class="pav">'+avatarInner(p)+'</div><div class="acc-info"><div class="an">'+nomeExib(p)+' '+roleBadge(p)+(g?' <span class="badge google">Google</span>':"")+'</div>');
+    h.push('<div class="acc-row">'+avatarTag(p,"pav")+'<div class="acc-info"><div class="an">'+nomeExib(p)+' '+roleBadge(p)+(g?' <span class="badge google">Google</span>':"")+'</div>');
     h.push('<div class="ad">login: '+esc(p.email)+(g?' · entra pelo Google':(DEMO?(' · senha: '+esc(p.senha)):' · senha: ••••••'))+'</div></div><div class="acc-acts">');
     if(g) h.push('<span class="muted" style="font-size:12px">sem senha no app</span>');
     else { if(DEMO) h.push('<button class="btn mini ghost" data-action="copy-acesso" data-id="'+p.id+'">Copiar</button>'); h.push('<button class="btn mini ok" data-action="reset-link" data-id="'+p.id+'">Redefinir</button>'); }
@@ -773,7 +791,7 @@ function renderGrupos(){
   for(var q=0;q<gs.length;q++){ var g=gs[q];
     h.push('<div class="subhead" style="margin:16px 0 6px">'+esc(g.nome)+' <span class="muted" style="font-weight:600">· '+g.players.length+'</span></div>');
     for(var j=0;j<g.players.length;j++){ var p=g.players[j];
-      h.push('<div class="prow" style="padding:9px 4px"><div class="pav">'+avatarInner(p)+'</div><div class="pinfo"><div class="pname">'+nomeExib(p)+'</div><div class="pmeta">'+posPairBadges(p)+'</div></div></div>');
+      h.push('<div class="prow" style="padding:9px 4px">'+avatarTag(p,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(p)+'</div><div class="pmeta">'+posPairBadges(p)+'</div></div></div>');
     }
   }
   h.push('</div>'); return h.join("");
@@ -808,7 +826,7 @@ function renderRanking(){
   var h=['<div class="panel"><div class="eyebrow">Nota da firma</div><h2 class="ph">Ranking</h2>'];
   h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Média da autoavaliação com as notas dos colegas. As notas dos colegas entram a partir de 3 avaliações — e são anônimas.</div>');
   for(var r=0;r<ranked.length;r++){ var p=ranked[r], ni=notaInfo(p);
-    h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(r+1)+'</div><div class="pav">'+avatarInner(p)+'</div>');
+    h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(r+1)+'</div>'+avatarTag(p,"pav")+'');
     h.push('<div class="pinfo"><div class="pname">'+nomeExib(p)+'</div><div class="pmeta">'+posPairBadges(p)+' '+(ni.agg?'<span class="muted" style="font-size:11.5px">'+ni.peers+' avaliações</span>':'<span class="badge semcob">só autoavaliação</span>')+'</div></div>');
     h.push('<div style="margin-left:auto;text-align:right">'+starsDisplay(ni.value)+'</div></div>');
   }
@@ -816,7 +834,7 @@ function renderRanking(){
   h.push('<div class="panel"><div class="eyebrow">Anônimo</div><h2 class="ph">Avalie os jogadores</h2><div class="muted" style="margin-top:4px;margin-bottom:6px">Dê nota a quem você quiser (opcional). Ninguém vê quem avaliou quem.</div>');
   var got=false;
   for(var a=0;a<jog.length;a++){ var q=jog[a]; if(q.id===meU.id) continue; got=true; var cur=getAval(meU.id,q.id);
-    h.push('<div class="prow"><div class="pav">'+avatarInner(q)+'</div><div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+posPairBadges(q)+'</div></div>');
+    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+posPairBadges(q)+'</div></div>');
     h.push('<div class="pacts" style="align-items:center"><div class="starsin" style="gap:4px">');
     for(var s=1;s<=5;s++){ h.push('<span class="starin '+(s<=cur?"on":"")+'" style="font-size:26px" data-action="set-aval" data-alvo="'+q.id+'" data-val="'+s+'">★</span>'); }
     h.push('</div>'); if(cur) h.push('<button class="btn mini ghost" data-action="clear-aval" data-alvo="'+q.id+'">limpar</button>');
@@ -872,7 +890,7 @@ function renderJogos(){
   h.push('<div class="subhead" style="margin-top:6px">Mensalistas — presença</div>');
   for(var m=0;m<mens.length;m++){ var q=mens[m], cc=j.confirm[q.id], pr=j.presenca[q.id];
     var chip=cc==="sim"?'<span class="badge mens">Confirmou</span>':cc==="nao"?'<span class="badge inativo">Não vai</span>':'<span class="badge semcob">Sem resposta</span>';
-    h.push('<div class="prow"><div class="pav">'+avatarInner(q)+'</div><div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+chip+' '+posPairBadges(q)+'</div></div>');
+    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+chip+' '+posPairBadges(q)+'</div></div>');
     h.push('<div class="pacts"><button class="btn mini '+(pr===true?"ok":"ghost")+'" data-action="pres-on" data-id="'+q.id+'">Presente</button><button class="btn mini '+(pr===false?"danger":"ghost")+'" data-action="pres-off" data-id="'+q.id+'">Faltou</button>'+(pr===true?golStepper(k,q.id):'')+'</div></div>');
   }
   if(mens.length===0) h.push('<div class="emptymsg">Nenhum mensalista ativo.</div>');
@@ -982,11 +1000,29 @@ function saveCadastro(){
   if(!isGoogle){ patch.email=e.email.trim(); if(e.novaSenha) patch.senha=e.novaSenha; }
   dbUpdate(u.id, patch); S.edit=null; S.msg={tipo:"ok",txt:"Cadastro atualizado."}; toast("Cadastro salvo"); render();
 }
-function processFoto(file){ var reader=new FileReader(); reader.onload=function(){ var img=new Image(); img.onload=function(){ var size=224, c=document.createElement("canvas"); c.width=size; c.height=size; var ctx=c.getContext("2d"); var s=Math.min(img.width,img.height), sx=(img.width-s)/2, sy=(img.height-s)/2; ctx.drawImage(img,sx,sy,s,s,0,0,size,size); var q=0.8, url=c.toDataURL("image/jpeg",q); while(url.length>55000 && q>0.4){ q-=0.12; url=c.toDataURL("image/jpeg",q); } syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=url; render(); }; img.src=reader.result; }; reader.readAsDataURL(file); }
+function processFoto(file){ var reader=new FileReader(); reader.onload=function(){ var img=new Image(); img.onload=function(){ var size=224, c=document.createElement("canvas"); c.width=size; c.height=size; var ctx=c.getContext("2d"); var s=Math.min(img.width,img.height), sx=(img.width-s)/2, sy=(img.height-s)/2; ctx.drawImage(img,sx,sy,s,s,0,0,size,size); var q=0.8, url=c.toDataURL("image/jpeg",q); while(url.length>55000 && q>0.4){ q-=0.12; url=c.toDataURL("image/jpeg",q); } syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=url; if(me()) dbUpdate(me().id,{foto:url}); toast("Foto atualizada"); render(); }; img.src=reader.result; }; reader.readAsDataURL(file); }
 
 function confirmModal(t, txt, onYes, danger){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>'+esc(t)+'</h3><p>'+esc(txt)+'</p><div class="row"><button class="btn ghost" data-action="modal-close">Cancelar</button><button class="btn" data-action="modal-yes" style="'+(danger?"background:var(--red)":"")+'">Confirmar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); window.__modalYes=onYes; }
 function promptModal(t, initial, onSave){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>'+esc(t)+'</h3><input id="promptInput" type="text" value="'+esc(initial||"")+'"><div class="row"><button class="btn ghost" data-action="modal-close">Cancelar</button><button class="btn" data-action="prompt-save">Salvar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); window.__promptSave=onSave; var el=document.getElementById("promptInput"); if(el) el.focus(); }
 function closeModal(){ document.getElementById("modalHost").innerHTML=""; window.__modalYes=null; window.__promptSave=null; }
+function playerModal(id){
+  var p=dbGet(id); if(!p) return; var ni=notaInfo(p);
+  var big = p.foto ? '<img src="'+p.foto+'" alt="">' : esc(initials(p.nome));
+  var g=0,kk; for(kk in demoJogos){ var gg=demoJogos[kk].gols||{}; if(gg[p.id]) g+=gg[p.id]; }
+  var h=['<div class="overlay" data-action="modal-close"><div class="modal pcard" data-stop="1">'];
+  h.push('<button class="pclose" data-action="modal-close" aria-label="Fechar">✕</button>');
+  h.push('<div class="pbig">'+big+'</div>');
+  h.push('<div class="pcname">'+esc(p.apelido||p.nome)+'</div>');
+  h.push('<div class="pcsub">'+esc(p.nome)+'</div>');
+  h.push('<div class="pcbadges">'+roleBadge(p)+' '+statusBadges(p)+(p.provider==="google"?' <span class="badge google">Google</span>':"")+' '+posPairBadges(p)+'</div>');
+  h.push('<div class="pcstars">'+starsDisplay(ni.value)+(ni.agg?'':' <span class="badge semcob" style="vertical-align:middle">só autoavaliação</span>')+'</div>');
+  h.push('<div class="pcgrid"><div class="pccell"><div class="k">Área</div><div class="v">'+esc(p.area||"—")+'</div></div>');
+  h.push('<div class="pccell"><div class="k">Supt</div><div class="v">'+esc(p.supt||"—")+'</div></div>');
+  h.push('<div class="pccell"><div class="k">Jogos</div><div class="v">'+statPresenca(p.id)+'</div></div>');
+  h.push('<div class="pccell"><div class="k">Gols</div><div class="v">'+g+'</div></div></div>');
+  if(p.telefone) h.push('<div class="muted" style="margin-top:12px">'+esc(p.telefone)+'</div>');
+  h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join("");
+}
 function shareModal(txt){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Compartilhar times</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
 function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(window.__toastT); window.__toastT=setTimeout(function(){ t.classList.remove("show"); },2200); }
 
@@ -1019,12 +1055,14 @@ document.addEventListener("click", function(ev){
   if(act==="pick-sec"){ syncActiveForm(); var t2=formTarget(); t2.sec=el.getAttribute("data-pos"); render(); return; }
   if(act==="set-star"){ syncActiveForm(); var t3=formTarget(); t3.autoavaliacao=parseInt(el.getAttribute("data-val"),10); render(); return; }
   if(act==="pick-foto"){ syncEditInputs(); document.getElementById("fotoInput").click(); return; }
-  if(act==="rem-foto"){ syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=null; render(); return; }
+  if(act==="rem-foto"){ syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=null; if(me()) dbUpdate(me().id,{foto:null}); toast("Foto removida"); render(); return; }
+  if(act==="view-player"){ playerModal(el.getAttribute("data-id")); return; }
   if(act==="save-cadastro"){ saveCadastro(); return; }
 
   if(act==="approve"){ dbUpdate(id,{status:"aprovado"}); toast("Cadastro aprovado"); render(); return; }
   if(act==="reject"){ var pr=dbGet(id); confirmModal("Recusar cadastro","Recusar o acesso de "+(pr?pr.apelido:"")+"?",function(){ dbUpdate(id,{status:"recusado"}); closeModal(); toast("Cadastro recusado"); render(); },true); return; }
-  if(act==="toggle-mens"){ var m=dbGet(id); dbUpdate(id,{mensalista:!m.mensalista}); toast(m.mensalista?"Marcado sem cobrança":"Agora é mensalista"); render(); return; }
+  if(act==="toggle-mens"){ var m=dbGet(id); var nm=!m.mensalista; dbUpdate(id,{mensalista:nm, isento: nm?(m.isento||false):false}); toast(nm?"Agora é mensalista":"Marcado sem cobrança"); render(); return; }
+  if(act==="toggle-isento"){ var mi=dbGet(id); dbUpdate(id,{isento:!mi.isento}); toast(mi.isento?"Voltou a ser cobrado":"Marcado como isento"); render(); return; }
   if(act==="toggle-ativo"){ var v=dbGet(id); dbUpdate(id,{ativo:!v.ativo}); toast(v.ativo?"Jogador inativado":"Jogador reativado"); render(); return; }
   if(act==="toggle-adm"){ var g=dbGet(id); var novo=g.role==="adm"?"jogador":"adm"; confirmModal(novo==="adm"?"Conceder Adm":"Remover Adm",(novo==="adm"?"Dar acesso de administrador a ":"Tirar o acesso de administrador de ")+g.apelido+"?",function(){ dbUpdate(id,{role:novo}); closeModal(); toast(novo==="adm"?"Agora é Adm":"Adm removido"); render(); }); return; }
 
