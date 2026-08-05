@@ -191,6 +191,14 @@ h2.ph{font-family:'Archivo',sans-serif;font-weight:800;font-size:21px;margin-bot
 .pccell{background:var(--grass-soft);border-radius:12px;padding:10px 12px}
 .pccell .k{font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--grass-deep);font-weight:700}
 .pccell .v{font-weight:700;font-size:15px;margin-top:2px}
+.pctit{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:14px}
+.titchip{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--amber-soft);color:var(--amber)}
+.cmtlink{font-size:11.5px;font-weight:700;color:var(--grass-deep);cursor:pointer}
+.mural{margin-top:18px;text-align:left;border-top:1px solid var(--line);padding-top:14px}
+.cmt{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+.cmthead{font-size:13px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.cmtbody{font-size:13.5px;margin-top:5px;line-height:1.4;white-space:pre-wrap}
+.cmtacts{display:flex;gap:12px;margin-top:8px}
 .modal h3{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;margin-bottom:8px}
 .modal p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-bottom:18px}
 .modal input{width:100%;padding:12px 14px;font-size:15px;border:1px solid var(--line);border-radius:11px;margin-bottom:18px}
@@ -258,6 +266,9 @@ var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebr
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
 var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 var WEEKDAYS = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
+var PREMIOS = [["craque","Craque da rodada","🏆"],["muralha","Muralha","🧤"],["garcom","Garçom","🎩"],["acougueiro","Açougueiro","🔪"],["bolamurcha","Bola murcha","🎈"],["fominha","Fominha","🍽️"]];
+function premioLabel(k){ for(var i=0;i<PREMIOS.length;i++) if(PREMIOS[i][0]===k) return PREMIOS[i][1]; return k; }
+function premioEmoji(k){ for(var i=0;i<PREMIOS.length;i++) if(PREMIOS[i][0]===k) return PREMIOS[i][2]; return "🏅"; }
 
 var CREST = ''
 + '<svg class="CRESTCLS" viewBox="0 0 64 72" xmlns="http://www.w3.org/2000/svg" aria-label="Escudo Fute da firma">'
@@ -303,7 +314,10 @@ var demoAvulsos = [        // lista persistente de avulsos (sem login)
   {id:"av1",nome:"Fábio Nunes",posPrincipal:"ataque",posSecundaria:null,nota:3},
   {id:"av2",nome:"Zé Carlos",posPrincipal:"zaga",posSecundaria:"meio",nota:3}
 ];
-var demoAvaliacoes = {};   // "avaliadorUid|alvoUid" -> nota 1-5 (anônimo entre pares)
+var demoNotas = {};    // "jogoKey|avaliadorUid|alvoUid" -> nota 1-5 (nota semanal)
+var demoPremios = {};  // "jogoKey|votanteUid|premio" -> alvoUid
+var demoBase = {};     // "avaliadorUid|alvoUid" -> nota base 1-5 (anônima, editável, só no Geral)
+var demoComentarios = {}; // "jogoKey|autorUid|alvoUid" -> texto (identificado)
 
 function dbAllPlayers(){ return demoPlayers.slice(); }
 function dbGet(id){ var a=dbAllPlayers(); for(var i=0;i<a.length;i++){ if(a[i].id===id) return a[i]; } return null; }
@@ -333,6 +347,10 @@ function proximoJogoKey(){ var dia=dbConfig().diaJogo, d=new Date(); d.setHours(
 function jogoLabel(k){ var d=parseYMD(k); return WEEKDAYS[d.getDay()]+", "+pad2(d.getDate())+"/"+pad2(d.getMonth()+1); }
 function jogoMesKey(k){ return k.slice(0,7); }
 function shiftJogo(k,weeks){ var d=parseYMD(k); d.setDate(d.getDate()+weeks*7); return ymd(d); }
+function jogoCloseTime(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,9,0,0,0); }
+function jogoFechado(k){ return new Date().getTime()>=jogoCloseTime(k).getTime(); }
+function jogoAvaliavel(k){ var now=new Date(), d=parseYMD(k), start=new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0); return now.getTime()>=start.getTime() && !jogoFechado(k); }
+function fmtPrazo(k){ var t=jogoCloseTime(k); return pad2(t.getDate())+"/"+pad2(t.getMonth()+1)+" às 09:00"; }
 function dbJogo(k){ if(!demoJogos[k]) demoJogos[k]={confirm:{},presenca:{},avulsos:[],gols:{},encerrado:false}; if(!demoJogos[k].gols) demoJogos[k].gols={}; return demoJogos[k]; }
 function dbJogoPeek(k){ return demoJogos[k]||null; }
 function setConfirm(uid,k,v){ var j=dbJogo(k); if(v) j.confirm[uid]=v; else delete j.confirm[uid]; if(FB){ var ref=db.collection("jogos").doc(k).collection("confirmacoes").doc(uid); if(v) ref.set({resp:v}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
@@ -347,16 +365,45 @@ function caixaTotais(){ var ent=0,sai=0,k; for(k in demoMensalidades){ var r=dem
 function mesTotais(mes){ var ent=0,sai=0,k; for(k in demoMensalidades){ if(k.slice(k.indexOf("|")+1)===mes){ var r=demoMensalidades[k]; if(r&&r.pago) ent+=(r.valor||0); } } ent+=avulsoPagosMes(mes); var ds=despesasMes(mes); for(var i=0;i<ds.length;i++){ sai+=ds[i].valor||0; } return {ent:ent,sai:sai,saldo:ent-sai}; }
 
 /* Avaliações entre jogadores (anônimas) */
-function getAval(av,al){ return demoAvaliacoes[av+"|"+al]||0; }
-function setAval(av,al,n){ if(n) demoAvaliacoes[av+"|"+al]=n; else delete demoAvaliacoes[av+"|"+al]; if(FB){ var ref=db.collection("avaliacoes").doc(av+"_"+al); if(n) ref.set({avaliador:av,alvo:al,nota:n}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
-function peerNotas(al){ var r=[],k; for(k in demoAvaliacoes){ if(k.slice(k.indexOf("|")+1)===al) r.push(demoAvaliacoes[k]); } return r; }
-function notaInfo(p){ var peers=peerNotas(p.id); if(peers.length>=3){ var sum=p.autoavaliacao||0; for(var i=0;i<peers.length;i++) sum+=peers[i]; return {value:sum/(peers.length+1), peers:peers.length, agg:true}; } return {value:p.autoavaliacao||0, peers:peers.length, agg:false}; }
+function presentesReg(k){ var j=dbJogo(k), all=dbAllPlayers(), r=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.status==="aprovado" && j.presenca[p.id]===true) r.push(p); } return r; }
+function getNota(k,av,al){ return demoNotas[k+"|"+av+"|"+al]||0; }
+function setNota(k,av,al,n){ var key=k+"|"+av+"|"+al; if(n) demoNotas[key]=n; else delete demoNotas[key]; if(FB){ var ref=db.collection("jogos").doc(k).collection("notas").doc(av+"_"+al); if(n) ref.set({avaliador:av,alvo:al,nota:n}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
+function notasRecebidas(k,al){ var r=[],kk; for(kk in demoNotas){ var p=kk.split("|"); if(p[0]===k && p[2]===al) r.push(demoNotas[kk]); } return r; }
+function notaJogo(k,al){ var r=notasRecebidas(k,al); if(r.length>=3){ var s=0,i; for(i=0;i<r.length;i++) s+=r[i]; return {value:s/r.length,n:r.length,agg:true}; } return {value:0,n:r.length,agg:false}; }
+function notasHistorico(al){ var jr=jogosRealizados().slice().sort(), arr=[],i; for(i=0;i<jr.length;i++){ if(!jogoFechado(jr[i])) continue; var nj=notaJogo(jr[i],al); if(nj.agg) arr.push(nj.value); } return arr; }
+function getBase(av,al){ return demoBase[av+"|"+al]||0; }
+function setBase(av,al,n){ var key=av+"|"+al; if(n) demoBase[key]=n; else delete demoBase[key]; if(FB){ var ref=db.collection("notasbase").doc(av+"_"+al); if(n) ref.set({avaliador:av,alvo:al,nota:n}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
+function baseRecebidas(al){ var r=[],kk; for(kk in demoBase){ if(kk.slice(kk.indexOf("|")+1)===al) r.push(demoBase[kk]); } return r; }
+function baseAgg(al){ var r=baseRecebidas(al); if(r.length>=3){ var s=0,i; for(i=0;i<r.length;i++) s+=r[i]; return {value:s/r.length,n:r.length,agg:true}; } return {value:0,n:r.length,agg:false}; }
+function notaRanking(p,modo){
+  if(!p) return {value:0,n:0,base:"auto"};
+  var wk=notasHistorico(p.id);
+  if(modo==="geral"){
+    var vals=wk.slice(), ba=baseAgg(p.id); if(ba.agg) vals.push(ba.value);
+    if(vals.length===0) return {value:p.autoavaliacao||0,n:0,base:"auto"};
+    var s=0,i; for(i=0;i<vals.length;i++) s+=vals[i]; return {value:s/vals.length,n:wk.length,base:"jogos",baseIncl:ba.agg};
+  }
+  if(wk.length===0) return {value:p.autoavaliacao||0,n:0,base:"auto"};
+  var arr=wk.slice(-3),s2=0,j; for(j=0;j<arr.length;j++) s2+=arr[j]; return {value:s2/arr.length,n:arr.length,base:"jogos"};
+}
+function notaVal(p){ return notaRanking(p,"u3").value; }
+function notaInfo(p){ var h=notasHistorico(p.id); return {value:notaVal(p), agg:h.length>0, n:h.length}; }
+/* Prêmios */
+function getVoto(k,vt,pr){ return demoPremios[k+"|"+vt+"|"+pr]||null; }
+function setVoto(k,vt,pr,alvo){ var key=k+"|"+vt+"|"+pr; if(alvo) demoPremios[key]=alvo; else delete demoPremios[key]; if(FB){ var vo={}; vo[pr]= alvo?alvo:fbFieldDel(); db.collection("jogos").doc(k).collection("premios").doc(vt).set({votante:vt,votos:vo},{merge:true}).catch(fbCatch()); } }
+function premioResultado(k,pr){ var counts={},kk; for(kk in demoPremios){ var p=kk.split("|"); if(p[0]===k && p[2]===pr){ var a=demoPremios[kk]; counts[a]=(counts[a]||0)+1; } } var max=0,x; for(x in counts) if(counts[x]>max) max=counts[x]; if(!max) return []; var w=[]; for(x in counts) if(counts[x]===max) w.push(x); return w; }
+function titulosDe(id){ var t={},jr=jogosRealizados(),i,pr; for(i=0;i<jr.length;i++){ if(!jogoFechado(jr[i])) continue; for(pr=0;pr<PREMIOS.length;pr++){ var w=premioResultado(jr[i],PREMIOS[pr][0]); if(w.indexOf(id)>=0) t[PREMIOS[pr][0]]=(t[PREMIOS[pr][0]]||0)+1; } } return t; }
+function quadroHonra(){ var res={},jr=jogosRealizados(),i,pr,x; for(pr=0;pr<PREMIOS.length;pr++) res[PREMIOS[pr][0]]={}; for(i=0;i<jr.length;i++){ if(!jogoFechado(jr[i])) continue; for(pr=0;pr<PREMIOS.length;pr++){ var w=premioResultado(jr[i],PREMIOS[pr][0]); for(x=0;x<w.length;x++) res[PREMIOS[pr][0]][w[x]]=(res[PREMIOS[pr][0]][w[x]]||0)+1; } } return res; }
+function nomeCurto(id){ var p=dbGet(id); return p?(p.apelido||p.nome):id; }
+function getComentario(k,autor,alvo){ return demoComentarios[k+"|"+autor+"|"+alvo]||""; }
+function setComentario(k,autor,alvo,txt){ var key=k+"|"+autor+"|"+alvo; txt=(txt||"").trim(); if(txt) demoComentarios[key]=txt; else delete demoComentarios[key]; if(FB){ var ref=db.collection("jogos").doc(k).collection("comentarios").doc(autor+"_"+alvo); if(txt) ref.set({autor:autor,alvo:alvo,texto:txt}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
+function comentariosDe(alvo){ var r=[],kk; for(kk in demoComentarios){ var p=kk.split("|"); if(p[2]===alvo) r.push({k:p[0],autor:p[1],alvo:alvo,texto:demoComentarios[kk]}); } r.sort(function(a,b){ return a.k<b.k?1:(a.k>b.k?-1:0); }); return r; }
 
 /* Sorteio de times */
 function poolFor(k){
   var j=dbJogo(k), anyPres=false, kk; for(kk in j.presenca){ anyPres=true; break; }
   var all=dbAllPlayers(), pool=[];
-  for(var i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue; var inc=anyPres?(j.presenca[p.id]===true):(j.confirm[p.id]==="sim"); if(inc){ var ni=notaInfo(p); pool.push({id:p.id,nome:nomeExibTxt(p),pos:p.posPrincipal,nota:ni.value,supt:p.supt,area:p.area,isAvulso:false}); } }
+  for(var i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue; var inc=anyPres?(j.presenca[p.id]===true):(j.confirm[p.id]==="sim"); if(inc){ var ni=notaRanking(p, S.sortNota||"u3"); pool.push({id:p.id,nome:nomeExibTxt(p),pos:p.posPrincipal,nota:ni.value,supt:p.supt,area:p.area,isAvulso:false}); } }
   for(var a=0;a<j.avulsos.length;a++){ var b=j.avulsos[a]; pool.push({id:b.id,nome:b.nome,pos:b.posPrincipal,nota:b.nota||3,supt:null,area:null,isAvulso:true}); }
   return pool;
 }
@@ -451,7 +498,10 @@ function subscribeAll(){ if(S._subscribed) return; S._subscribed=true;
   db.collection("avulsos").onSnapshot(function(qs){ demoAvulsos=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoAvulsos.push(o); }); render(); }, fbCatch());
   db.collection("jogos").onSnapshot(function(qs){ qs.forEach(function(d){ var o=d.data(); var j=dbJogo(d.id); j.presenca=o.presenca||{}; j.gols=o.gols||{}; j.avulsos=o.avulsos||[]; j.encerrado=!!o.encerrado; }); render(); }, fbCatch());
   db.collectionGroup("confirmacoes").onSnapshot(function(qs){ var k; for(k in demoJogos) demoJogos[k].confirm={}; qs.forEach(function(d){ var jk=d.ref.parent.parent.id; dbJogo(jk).confirm[d.id]=d.data().resp; }); render(); }, fbCatch());
-  db.collection("avaliacoes").onSnapshot(function(qs){ demoAvaliacoes={}; qs.forEach(function(d){ var o=d.data(); if(o.avaliador&&o.alvo&&o.nota) demoAvaliacoes[o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
+  db.collectionGroup("notas").onSnapshot(function(qs){ demoNotas={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.avaliador&&o.alvo&&o.nota) demoNotas[jk+"|"+o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
+  db.collectionGroup("premios").onSnapshot(function(qs){ demoPremios={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id, vt=o.votante||d.id, vs=o.votos||{}; for(var pr in vs){ if(vs[pr]) demoPremios[jk+"|"+vt+"|"+pr]=vs[pr]; } }); render(); }, fbCatch());
+  db.collection("notasbase").onSnapshot(function(qs){ demoBase={}; qs.forEach(function(d){ var o=d.data(); if(o.avaliador&&o.alvo&&o.nota) demoBase[o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
+  db.collectionGroup("comentarios").onSnapshot(function(qs){ demoComentarios={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.autor&&o.alvo&&o.texto) demoComentarios[jk+"|"+o.autor+"|"+o.alvo]=o.texto; }); render(); }, fbCatch());
 }
 
 /* =====================================================================
@@ -503,7 +553,7 @@ function pickerSelect(kind, items, val, isNew, newName, idNew){
 /* =====================================================================
    ESTADO
    ===================================================================== */
-var S = { view:"auth", authTab:"login", appTab:"inicio", sessionId:null, msg:null, forgot:false, edit:null, form:null, googleNew:false, tesMes:null, jogoSel:null, sorteio:null, grpBy:"area" };
+var S = { view:"auth", authTab:"login", appTab:"inicio", sessionId:null, msg:null, forgot:false, edit:null, form:null, googleNew:false, tesMes:null, jogoSel:null, sorteio:null, grpBy:"area", rankModo:"u3", sortNota:"u3", avaliarJogo:null };
 function me(){ return S.sessionId ? dbGet(S.sessionId) : null; }
 function amAdm(){ var u=me(); return !!u && (u.role==="adm"||u.role==="master"); }
 function amMaster(){ var u=me(); return !!u && u.role==="master"; }
@@ -628,7 +678,22 @@ function renderInicio(u){
   h.push('<div class="pfcell"><div class="k">Supt</div><div class="v">'+esc(u.supt||"—")+'</div></div></div>');
   h.push('<div class="muted" style="margin-top:12px">'+(niU.agg?('Reflete sua autoavaliação + '+niU.peers+' avaliações dos colegas.'):'As notas dos colegas entram a partir de 3 avaliações — hoje reflete só a sua autoavaliação.')+'</div></div>');
   h.push(proximoJogoCard(u));
+  h.push(avaliarCard(u));
   h.push(mensalidadeCard(u));
+  return h.join("");
+}
+function avaliarCard(u){
+  if(!u.mensalista) return "";
+  var k=proximoJogoKey(), cand=null;
+  // procura o jogo avaliável mais recente em que o usuário esteve presente
+  var keys=[k, shiftJogo(k,-1)];
+  for(var i=0;i<keys.length;i++){ var kk=keys[i]; if(jogoAvaliavel(kk)){ var j=dbJogoPeek(kk); if(j && j.presenca[u.id]===true){ cand=kk; break; } } }
+  if(!cand) return "";
+  var pres=presentesReg(cand), feitas=0; for(var p=0;p<pres.length;p++){ if(pres[p].id!==u.id && getNota(cand,u.id,pres[p].id)) feitas++; }
+  var total=pres.length-1;
+  var h=['<div class="panel" style="border:1px solid var(--grass)"><div class="eyebrow">Avaliação da rodada</div>'];
+  h.push('<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:4px"><div><div style="font-weight:700;font-size:15px;text-transform:capitalize">'+esc(jogoLabel(cand))+'</div><div class="muted" style="margin-top:2px">fecha em '+esc(fmtPrazo(cand))+' · '+feitas+'/'+total+' notas dadas</div></div>');
+  h.push('<button class="btn small" data-action="avaliar-open" data-k="'+cand+'">Avaliar</button></div></div>');
   return h.join("");
 }
 
@@ -813,6 +878,15 @@ function renderEstatisticas(){
   h.push('<div class="subhead" style="margin-top:6px">Por supt</div>'+barList(psupt));
   h.push('<div class="subhead" style="margin-top:14px">Por área</div>'+barList(parea));
   h.push('</div>');
+  h.push('<div class="panel"><div class="eyebrow">Honrarias</div><h2 class="ph">Quadro de honra</h2>');
+  var qh=quadroHonra(), teveAlgum=false;
+  for(var pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0], mp=qh[pk], arr=[],idk; for(idk in mp) arr.push({id:idk,n:mp[idk]}); arr.sort(function(a,b){return b.n-a.n;});
+    h.push('<div class="subhead" style="margin:14px 0 6px">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div>');
+    if(arr.length===0){ h.push('<div class="muted" style="font-size:12.5px">Ainda sem ganhadores.</div>'); continue; }
+    teveAlgum=true;
+    for(var a2=0;a2<arr.length&&a2<3;a2++){ h.push('<div class="prow" style="padding:7px 4px"><div class="pinfo"><div class="pname">'+esc(nomeCurto(arr[a2].id))+'</div></div><div class="muted"><b style="color:var(--ink)">'+arr[a2].n+'</b>×</div></div>'); }
+  }
+  h.push('</div>');
   h.push('<div class="panel"><div class="eyebrow">Histórico</div><h2 class="ph">Últimos jogos</h2>');
   if(jr.length===0) h.push('<div class="emptymsg">Nenhum jogo registrado ainda.</div>');
   var rev=jr.slice().reverse();
@@ -821,26 +895,55 @@ function renderEstatisticas(){
   h.push('</div>'); return h.join("");
 }
 function renderRanking(){
-  var meU=me(), all=dbAllPlayers(), jog=[]; for(var i=0;i<all.length;i++){ if(all[i].status==="aprovado") jog.push(all[i]); }
-  var ranked=jog.slice().sort(function(a,b){ return notaInfo(b).value-notaInfo(a).value; });
+  if(!S.rankModo) S.rankModo="u3";
+  var all=dbAllPlayers(), jog=[]; for(var i=0;i<all.length;i++){ if(all[i].status==="aprovado") jog.push(all[i]); }
+  var ranked=jog.slice().sort(function(a,b){ return notaRanking(b,S.rankModo).value-notaRanking(a,S.rankModo).value; });
   var h=['<div class="panel"><div class="eyebrow">Nota da firma</div><h2 class="ph">Ranking</h2>'];
-  h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Média da autoavaliação com as notas dos colegas. As notas dos colegas entram a partir de 3 avaliações — e são anônimas.</div>');
-  for(var r=0;r<ranked.length;r++){ var p=ranked[r], ni=notaInfo(p);
-    h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(r+1)+'</div>'+avatarTag(p,"pav")+'');
-    h.push('<div class="pinfo"><div class="pname">'+nomeExib(p)+'</div><div class="pmeta">'+posPairBadges(p)+' '+(ni.agg?'<span class="muted" style="font-size:11.5px">'+ni.peers+' avaliações</span>':'<span class="badge semcob">só autoavaliação</span>')+'</div></div>');
+  h.push('<div class="seg" style="margin-top:12px"><button data-action="rank-modo" data-m="u3" class="'+(S.rankModo==="u3"?"on":"")+'">Últimas 3</button><button data-action="rank-modo" data-m="geral" class="'+(S.rankModo==="geral"?"on":"")+'">Geral</button></div>');
+  h.push('<div class="muted" style="margin-bottom:8px">'+(S.rankModo==="u3"?"Média das 3 notas semanais mais recentes de cada jogador.":"Média das notas semanais + a nota geral (base). Quem ainda não tem nota aparece com a autoavaliação.")+'</div>');
+  for(var r=0;r<ranked.length;r++){ var p=ranked[r], ni=notaRanking(p,S.rankModo);
+    h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(r+1)+'</div>'+avatarTag(p,"pav"));
+    h.push('<div class="pinfo"><div class="pname">'+nomeExib(p)+'</div><div class="pmeta">'+posPairBadges(p)+' '+(ni.base==="jogos"?'<span class="muted" style="font-size:11.5px">'+ni.n+' jogo'+(ni.n===1?'':'s')+(ni.baseIncl?' + base':'')+'</span>':'<span class="badge semcob">autoavaliação</span>')+'</div></div>');
     h.push('<div style="margin-left:auto;text-align:right">'+starsDisplay(ni.value)+'</div></div>');
   }
   h.push('</div>');
-  h.push('<div class="panel"><div class="eyebrow">Anônimo</div><h2 class="ph">Avalie os jogadores</h2><div class="muted" style="margin-top:4px;margin-bottom:6px">Dê nota a quem você quiser (opcional). Ninguém vê quem avaliou quem.</div>');
-  var got=false;
-  for(var a=0;a<jog.length;a++){ var q=jog[a]; if(q.id===meU.id) continue; got=true; var cur=getAval(meU.id,q.id);
+  // Nota geral (base) — anônima, editável a qualquer momento
+  var meU=me(), got=false;
+  h.push('<div class="panel"><div class="eyebrow">Anônimo</div><h2 class="ph">Nota geral (base)</h2><div class="muted" style="margin-top:4px;margin-bottom:6px">Sua avaliação geral de cada jogador — vale a qualquer momento e entra só na média <b>Geral</b> (não nas Últimas 3). Pode mudar quando quiser.</div>');
+  for(var b=0;b<jog.length;b++){ var q=jog[b]; if(q.id===meU.id) continue; got=true; var cur=getBase(meU.id,q.id);
     h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+posPairBadges(q)+'</div></div>');
     h.push('<div class="pacts" style="align-items:center"><div class="starsin" style="gap:4px">');
-    for(var s=1;s<=5;s++){ h.push('<span class="starin '+(s<=cur?"on":"")+'" style="font-size:26px" data-action="set-aval" data-alvo="'+q.id+'" data-val="'+s+'">★</span>'); }
-    h.push('</div>'); if(cur) h.push('<button class="btn mini ghost" data-action="clear-aval" data-alvo="'+q.id+'">limpar</button>');
+    for(var s=1;s<=5;s++){ h.push('<span class="starin '+(s<=cur?"on":"")+'" style="font-size:26px" data-action="set-base" data-alvo="'+q.id+'" data-val="'+s+'">★</span>'); }
+    h.push('</div>'); if(cur) h.push('<button class="btn mini ghost" data-action="clear-base" data-alvo="'+q.id+'">limpar</button>');
     h.push('</div></div>');
   }
   if(!got) h.push('<div class="emptymsg">Ainda não há outros jogadores para avaliar.</div>');
+  h.push('</div>'); return h.join("");
+}
+function renderAvaliar(){
+  var k=S.avaliarJogo, u=me(), pres=presentesReg(k);
+  var h=['<div class="panel"><div class="eyebrow">Avaliação da rodada</div><h2 class="ph" style="text-transform:capitalize">'+esc(jogoLabel(k))+'</h2>'];
+  h.push('<div class="muted" style="margin-top:4px">Avalie os presentes e vote nos prêmios. Fecha em <b>'+esc(fmtPrazo(k))+'</b>. Ninguém vê quem votou/avaliou o quê.</div>');
+  h.push('<div style="margin-top:12px"><button class="btn ghost small" data-action="avaliar-close">← Voltar</button></div></div>');
+  // Notas
+  h.push('<div class="panel"><div class="subhead">Notas (1 a 5)</div>');
+  var got=false;
+  for(var i=0;i<pres.length;i++){ var q=pres[i]; if(q.id===u.id) continue; got=true; var cur=getNota(k,u.id,q.id); var jaCom=getComentario(k,u.id,q.id);
+    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+posPairBadges(q)+' <span class="cmtlink" data-action="cmt-open" data-k="'+k+'" data-alvo="'+q.id+'">💬 '+(jaCom?"editar comentário":"comentar")+'</span></div></div>');
+    h.push('<div class="pacts" style="align-items:center"><div class="starsin" style="gap:4px">');
+    for(var s=1;s<=5;s++){ h.push('<span class="starin '+(s<=cur?"on":"")+'" style="font-size:26px" data-action="set-nota" data-alvo="'+q.id+'" data-val="'+s+'">★</span>'); }
+    h.push('</div>'); if(cur) h.push('<button class="btn mini ghost" data-action="clear-nota" data-alvo="'+q.id+'">limpar</button>');
+    h.push('</div></div>');
+  }
+  if(!got) h.push('<div class="emptymsg">Ninguém mais presente pra avaliar.</div>');
+  h.push('</div>');
+  // Prêmios
+  h.push('<div class="panel"><div class="subhead">Prêmios da rodada</div><div class="muted" style="margin-bottom:6px">Um voto por prêmio (toque pra escolher; toque de novo pra tirar).</div>');
+  for(var pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0]; var voto=getVoto(k,u.id,pk);
+    h.push('<div style="margin-top:14px"><div style="font-weight:700;font-size:14px">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div><div class="poschips" style="margin-top:8px">');
+    for(var c=0;c<pres.length;c++){ var cand=pres[c]; var on=voto===cand.id?" on":""; h.push('<div class="poschip'+on+'" data-action="premio-vote" data-k="'+esc(pk)+'" data-alvo="'+cand.id+'">'+esc(cand.apelido||cand.nome)+'</div>'); }
+    h.push('</div></div>');
+  }
   h.push('</div>'); return h.join("");
 }
 function renderSorteioResult(sr){
@@ -925,6 +1028,7 @@ function renderJogos(){
   h.push('<div class="grid2"><div class="field"><label for="so_n">Nº de times</label><select id="so_n" class="selin">');
   for(var nt=2;nt<=4;nt++) h.push('<option value="'+nt+'">'+nt+' times</option>');
   h.push('</select></div><div class="field"><label for="so_modo">Critério</label><select id="so_modo" class="selin"><option value="eq">Equilibrado (nota + posição)</option><option value="supt">Temático: por supt</option><option value="area">Temático: por área</option></select></div></div>');
+  h.push('<div class="field"><label for="so_nota">Nota usada no equilíbrio</label><select id="so_nota" class="selin"><option value="u3"'+((S.sortNota||"u3")==="u3"?" selected":"")+'>Média das 3 últimas</option><option value="geral"'+(S.sortNota==="geral"?" selected":"")+'>Histórico completo</option></select></div>');
   h.push('<button class="btn" data-action="do-sorteio">Sortear times</button>');
   if(S.sorteio && S.sorteio.key===k) h.push(renderSorteioResult(S.sorteio));
   h.push('</div>');
@@ -933,7 +1037,8 @@ function renderJogos(){
 function renderApp(){
   var u=me(); if(!u){ S.view="auth"; return renderAuth(); }
   var h=['<div class="wrap">']; h.push(renderHeader(u)); h.push(renderTabs());
-  if(S.appTab==="cadastro") h.push(renderCadastro(u));
+  if(S.avaliarJogo) h.push(renderAvaliar());
+  else if(S.appTab==="cadastro") h.push(renderCadastro(u));
   else if(S.appTab==="ranking") h.push(renderRanking());
   else if(S.appTab==="stats") h.push(renderEstatisticas());
   else if(S.appTab==="admin" && amAdm()) h.push(renderAdmin());
@@ -1020,10 +1125,29 @@ function playerModal(id){
   h.push('<div class="pccell"><div class="k">Supt</div><div class="v">'+esc(p.supt||"—")+'</div></div>');
   h.push('<div class="pccell"><div class="k">Jogos</div><div class="v">'+statPresenca(p.id)+'</div></div>');
   h.push('<div class="pccell"><div class="k">Gols</div><div class="v">'+g+'</div></div></div>');
+  var tit=titulosDe(p.id), tks=[]; for(var tk in tit) tks.push(tk);
+  if(tks.length){ h.push('<div class="pctit">'); for(var ti=0;ti<PREMIOS.length;ti++){ var pk=PREMIOS[ti][0]; if(tit[pk]) h.push('<span class="titchip">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+' ×'+tit[pk]+'</span>'); } h.push('</div>'); }
   if(p.telefone) h.push('<div class="muted" style="margin-top:12px">'+esc(p.telefone)+'</div>');
+  // Mural de comentários
+  var cms=comentariosDe(p.id), meU=me(), amAdmV=amAdm();
+  h.push('<div class="mural"><div class="subhead" style="text-align:left;margin-bottom:8px">Mural</div>');
+  if(cms.length===0) h.push('<div class="muted" style="font-size:12.5px;text-align:left">Ainda sem comentários.</div>');
+  for(var ci=0;ci<cms.length;ci++){ var cm=cms[ci];
+    var titn=""; for(var pr=0;pr<PREMIOS.length;pr++){ if(premioResultado(cm.k,PREMIOS[pr][0]).indexOf(p.id)>=0) titn+=' <span class="titchip" style="padding:2px 7px">'+premioEmoji(PREMIOS[pr][0])+' '+esc(premioLabel(PREMIOS[pr][0]))+'</span>'; }
+    h.push('<div class="cmt"><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(jogoLabel(cm.k))+'</span>'+titn+'</div>');
+    h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
+    if(cm.autor===meU.id || amAdmV){ h.push('<div class="cmtacts">'+(cm.autor===meU.id?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+p.id+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+p.id+'">apagar</span></div>'); }
+    h.push('</div>');
+  }
+  h.push('</div>');
   h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join("");
 }
 function shareModal(txt){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Compartilhar times</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
+function comentarioModal(k,alvo){ var u=me(), cur=getComentario(k,u.id,alvo), alv=dbGet(alvo);
+  var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Comentário sobre '+esc(alv?(alv.apelido||alv.nome):"")+'</h3><p>'+esc(jogoLabel(k))+' · aparece com seu nome no perfil dele.</p>'];
+  h.push('<textarea id="cmtTxt" class="sharebox" style="height:120px;font-family:inherit" placeholder="Escreva algo bacana...">'+esc(cur)+'</textarea>');
+  h.push('<div class="row" style="margin-top:14px;justify-content:space-between"><div>'+(cur?'<button class="btn ghost small" data-action="cmt-del" data-k="'+k+'" data-alvo="'+alvo+'">Apagar</button>':'')+'</div><div style="display:flex;gap:8px"><button class="btn ghost" data-action="modal-close">Cancelar</button><button class="btn" data-action="cmt-save" data-k="'+k+'" data-alvo="'+alvo+'">Salvar</button></div></div>');
+  h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join(""); }
 function toast(msg){ var t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(window.__toastT); window.__toastT=setTimeout(function(){ t.classList.remove("show"); },2200); }
 
 function googleChooser(){
@@ -1049,7 +1173,7 @@ document.addEventListener("click", function(ev){
   if(act==="google-cancel"){ S.googleNew=false; S.form=null; S.msg=null; if(FB&&auth.currentUser) auth.signOut(); render(); return; }
   if(act==="do-google-complete"){ doGoogleComplete(); return; }
   if(act==="logout"){ if(FB){ S.edit=null; S.form=null; S.googleNew=false; S.forgot=false; S.sorteio=null; auth.signOut(); return; } S.sessionId=null; S.view="auth"; S.authTab="login"; S.forgot=false; S.googleNew=false; S.msg=null; S.edit=null; S.form=null; render(); return; }
-  if(act==="app-tab"){ S.appTab=el.getAttribute("data-tab"); S.msg=null; if(S.appTab==="cadastro"){ S.edit=null; ensureEdit(); } if(S.appTab==="tesouraria" && !S.tesMes){ S.tesMes=todayKey(); } if(S.appTab==="jogos" && !S.jogoSel){ S.jogoSel=proximoJogoKey(); } render(); return; }
+  if(act==="app-tab"){ S.appTab=el.getAttribute("data-tab"); S.msg=null; S.avaliarJogo=null; if(S.appTab==="cadastro"){ S.edit=null; ensureEdit(); } if(S.appTab==="tesouraria" && !S.tesMes){ S.tesMes=todayKey(); } if(S.appTab==="jogos" && !S.jogoSel){ S.jogoSel=proximoJogoKey(); } render(); return; }
 
   if(act==="pick-princ"){ syncActiveForm(); var t=formTarget(); t.princ=el.getAttribute("data-pos"); if(t.sec===t.princ) t.sec=""; render(); return; }
   if(act==="pick-sec"){ syncActiveForm(); var t2=formTarget(); t2.sec=el.getAttribute("data-pos"); render(); return; }
@@ -1081,13 +1205,22 @@ document.addEventListener("click", function(ev){
   if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim() }); S.jogoSel=proximoJogoKey(); toast("Dia do jogo salvo"); render(); return; }
   if(act==="jogo-prev"){ S.jogoSel=shiftJogo(S.jogoSel,-1); S.sorteio=null; render(); return; }
   if(act==="jogo-next"){ S.jogoSel=shiftJogo(S.jogoSel,1); S.sorteio=null; render(); return; }
-  if(act==="do-sorteio"){ var n=parseInt(val("so_n"),10)||2, modo=val("so_modo"), pl=poolFor(S.jogoSel); var res=(modo==="eq")?drawBalanced(pl,n):drawTematico(pl, modo==="supt"?"supt":"area"); res.key=S.jogoSel; res.modo=modo; S.sorteio=res; render(); return; }
+  if(act==="do-sorteio"){ S.sortNota=val("so_nota")||"u3"; var n=parseInt(val("so_n"),10)||2, modo=val("so_modo"), pl=poolFor(S.jogoSel); var res=(modo==="eq")?drawBalanced(pl,n):drawTematico(pl, modo==="supt"?"supt":"area"); res.key=S.jogoSel; res.modo=modo; S.sorteio=res; render(); return; }
   if(act==="gol-inc"){ setGols(S.jogoSel,id,getGols(S.jogoSel,id)+1); render(); return; }
   if(act==="gol-dec"){ setGols(S.jogoSel,id,getGols(S.jogoSel,id)-1); render(); return; }
   if(act==="share-sorteio"){ if(!S.sorteio||S.sorteio.erro){ toast("Sorteie os times primeiro"); return; } var txt=sorteioTexto(S.sorteio); if(navigator.share){ navigator.share({text:txt}).catch(function(){ shareModal(txt); }); } else { shareModal(txt); } return; }
   if(act==="copy-share"){ var ta=document.getElementById("shareTxt"); if(ta&&navigator.clipboard){ navigator.clipboard.writeText(ta.value); } else if(ta){ ta.select(); try{document.execCommand("copy");}catch(e){} } toast("Times copiados"); closeModal(); return; }
-  if(act==="set-aval"){ setAval(me().id, el.getAttribute("data-alvo"), parseInt(el.getAttribute("data-val"),10)); toast("Avaliação registrada"); render(); return; }
-  if(act==="clear-aval"){ setAval(me().id, el.getAttribute("data-alvo"), 0); toast("Avaliação removida"); render(); return; }
+  if(act==="set-nota"){ setNota(S.avaliarJogo, me().id, el.getAttribute("data-alvo"), parseInt(el.getAttribute("data-val"),10)); toast("Nota registrada"); render(); return; }
+  if(act==="clear-nota"){ setNota(S.avaliarJogo, me().id, el.getAttribute("data-alvo"), 0); toast("Nota removida"); render(); return; }
+  if(act==="premio-vote"){ var pk=el.getAttribute("data-k"), alvo=el.getAttribute("data-alvo"); var cur=getVoto(S.avaliarJogo, me().id, pk); setVoto(S.avaliarJogo, me().id, pk, cur===alvo?null:alvo); render(); return; }
+  if(act==="avaliar-open"){ S.avaliarJogo=el.getAttribute("data-k"); S.msg=null; window.scrollTo(0,0); render(); return; }
+  if(act==="avaliar-close"){ S.avaliarJogo=null; render(); return; }
+  if(act==="cmt-open"){ comentarioModal(el.getAttribute("data-k"), el.getAttribute("data-alvo")); return; }
+  if(act==="cmt-save"){ var ct=document.getElementById("cmtTxt"); setComentario(el.getAttribute("data-k"), me().id, el.getAttribute("data-alvo"), ct?ct.value:""); closeModal(); toast("Comentário salvo"); render(); return; }
+  if(act==="cmt-del"){ var autor=el.getAttribute("data-autor")||me().id; setComentario(el.getAttribute("data-k"), autor, el.getAttribute("data-alvo"), ""); closeModal(); toast("Comentário apagado"); render(); return; }
+  if(act==="rank-modo"){ S.rankModo=el.getAttribute("data-m"); render(); return; }
+  if(act==="set-base"){ setBase(me().id, el.getAttribute("data-alvo"), parseInt(el.getAttribute("data-val"),10)); toast("Nota geral registrada"); render(); return; }
+  if(act==="clear-base"){ setBase(me().id, el.getAttribute("data-alvo"), 0); toast("Nota geral removida"); render(); return; }
   if(act==="pres-on"){ var jo=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jo.presenca[id]===true?null:true); render(); return; }
   if(act==="pres-off"){ var jf=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jf.presenca[id]===false?null:false); render(); return; }
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
@@ -1139,18 +1272,33 @@ function seedDemo(){ if(!DEMO) return; var m=todayKey(), pm=shiftMonth(m,-1);
   j.confirm={u_master:"sim",u_bruno:"sim",u_diego:"sim",u_lucas:"nao"};
   j.avulsos=[{id:"ja_s1",nome:"Fábio Nunes",posPrincipal:"ataque",posSecundaria:null,nota:3,valor:0,pago:false}];
   var past=shiftJogo(pj,-1), jpast=dbJogo(past);
-  jpast.confirm={u_master:"sim",u_bruno:"sim",u_diego:"sim",u_adm:"nao"};
-  jpast.presenca={u_master:true,u_bruno:true,u_diego:true,u_adm:false};
+  jpast.confirm={u_master:"sim",u_bruno:"sim",u_diego:"sim",u_adm:"sim",u_lucas:"sim",u_paulo:"sim"};
+  jpast.presenca={u_master:true,u_bruno:true,u_diego:true,u_adm:true,u_lucas:true,u_paulo:true};
   jpast.avulsos=[{id:"ja_s2",nome:"Zé Carlos",posPrincipal:"zaga",posSecundaria:"meio",nota:3,valor:20,pago:true}];
   jpast.gols={u_bruno:2,u_master:1,ja_s2:1};
   jpast.encerrado=true;
-  // Avaliações de pares (anônimas): Bruninho e Paredão já têm 3+ avaliações
-  setAval("u_master","u_bruno",5); setAval("u_diego","u_bruno",5); setAval("u_lucas","u_bruno",4); setAval("u_adm","u_bruno",5);
-  setAval("u_master","u_diego",3); setAval("u_bruno","u_diego",3); setAval("u_lucas","u_diego",4);
-  setAval("u_adm","u_master",4); setAval("u_bruno","u_master",4); // 2 pares -> ainda só autoavaliação
-  setAval("u_master","u_adm",4); // 1 par
+  // Notas semanais do jogo passado (cada presente avalia os outros)
+  var presS=["u_master","u_bruno","u_diego","u_adm","u_lucas","u_paulo"];
+  var notaBase={u_master:4,u_bruno:5,u_diego:3,u_adm:4,u_lucas:4,u_paulo:3};
+  for(var a=0;a<presS.length;a++){ for(var b=0;b<presS.length;b++){ if(a===b) continue; var nb=notaBase[presS[b]]; var jit=((a+b)%3)-1; var nv=Math.max(1,Math.min(5,nb+jit)); demoNotas[past+"|"+presS[a]+"|"+presS[b]]=nv; } }
+  // Votos de prêmios do jogo passado
+  for(var v=0;v<presS.length;v++){ var vt=presS[v];
+    demoPremios[past+"|"+vt+"|craque"]="u_bruno";
+    demoPremios[past+"|"+vt+"|muralha"]="u_diego";
+    demoPremios[past+"|"+vt+"|garcom"]=(v%2?"u_master":"u_lucas");
+    demoPremios[past+"|"+vt+"|acougueiro"]="u_adm";
+    demoPremios[past+"|"+vt+"|bolamurcha"]="u_paulo";
+    demoPremios[past+"|"+vt+"|fominha"]=(v%2?"u_paulo":"u_master");
+  }
+  // Nota geral (base) — anônima
+  var baseVals={u_master:4,u_bruno:5,u_diego:4,u_adm:4,u_lucas:3,u_paulo:3};
+  for(var ba=0;ba<presS.length;ba++){ for(var bb=0;bb<presS.length;bb++){ if(ba===bb) continue; demoBase[presS[ba]+"|"+presS[bb]]=Math.max(1,Math.min(5,baseVals[presS[bb]]+((ba+bb)%2?0:-1))); } }
+  // Comentários (identificados) no mural
+  demoComentarios[past+"|u_master|u_bruno"]="Monstro no ataque, decidiu o jogo!";
+  demoComentarios[past+"|u_diego|u_bruno"]="Faltou passar a bola às vezes, mas jogou muito.";
+  demoComentarios[past+"|u_bruno|u_diego"]="Pegou dois pênaltis, muralha mesmo.";
 }
-if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoAvaliacoes={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); render(); }
+if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); render(); }
 else { if(DEMO) seedDemo(); render(); }
 </script>
 </body>
