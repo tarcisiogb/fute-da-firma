@@ -67,7 +67,7 @@ header.top{display:flex;align-items:center;gap:12px;padding:20px 4px 4px}
 nav.tabs{display:flex;gap:6px;overflow-x:auto;margin:4px 0 18px;padding-bottom:4px;scrollbar-width:none;position:relative}
 nav.tabs::-webkit-scrollbar{display:none}
 nav.tabs button{flex:0 0 auto;background:#fff;border:1px solid var(--line);color:var(--ink-soft);font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;cursor:pointer;white-space:nowrap;transition:all .15s ease}
-nav.tabs button:not(.on):hover:not(:disabled){color:var(--grass-deep);border-color:var(--grass)}
+@media (hover:hover){ nav.tabs button:not(.on):hover:not(:disabled){color:var(--grass-deep);border-color:var(--grass)} }
 nav.tabs button.on{background:var(--pitch);color:#fff;border-color:var(--pitch)}
 
 .panel{background:#fff;border-radius:16px;padding:20px;box-shadow:var(--shadow);border:1px solid var(--line);margin-bottom:16px}
@@ -220,6 +220,8 @@ h2.ph{font-family:'Archivo',sans-serif;font-weight:800;font-size:21px;margin-bot
 .teampl{flex:1;font-weight:600;font-size:14px}
 .teamnota{flex:0 0 auto}
 .golstep{display:flex;align-items:center;gap:6px}
+.avdel{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;color:var(--ink-soft);font-size:11px;margin-left:2px}
+.avdel:hover{background:var(--danger-soft);color:var(--danger)}
 .golnum{font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;min-width:36px;text-align:center}
 .barrow{display:flex;align-items:center;gap:10px;margin:8px 0}
 .barlbl{flex:0 0 96px;font-size:13px;font-weight:600}
@@ -401,28 +403,51 @@ function comentariosDe(alvo){ var r=[],kk; for(kk in demoComentarios){ var p=kk.
 
 /* Sorteio de times */
 function poolFor(k){
-  var j=dbJogo(k), anyPres=false, kk; for(kk in j.presenca){ anyPres=true; break; }
+  var j=dbJogo(k);
   var all=dbAllPlayers(), pool=[];
-  for(var i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue; var inc=anyPres?(j.presenca[p.id]===true):(j.confirm[p.id]==="sim"); if(inc){ var ni=notaRanking(p, S.sortNota||"u3"); pool.push({id:p.id,nome:nomeExibTxt(p),pos:p.posPrincipal,nota:ni.value,supt:p.supt,area:p.area,isAvulso:false}); } }
-  for(var a=0;a<j.avulsos.length;a++){ var b=j.avulsos[a]; pool.push({id:b.id,nome:b.nome,pos:b.posPrincipal,nota:b.nota||3,supt:null,area:null,isAvulso:true}); }
+  for(var i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue; if(j.presenca[p.id]!==true) continue; var ni=notaRanking(p, S.sortNota||"u3"); pool.push({id:p.id,nome:nomeExibTxt(p),pos:p.posPrincipal,sec:p.posSecundaria||null,nota:ni.value,supt:p.supt,area:p.area,isAvulso:false}); }
+  for(var a=0;a<j.avulsos.length;a++){ var b=j.avulsos[a]; pool.push({id:b.id,nome:b.nome,pos:b.posPrincipal,sec:b.posSecundaria||null,nota:b.nota||3,supt:null,area:null,isAvulso:true}); }
   return pool;
 }
 function emptyTeams(n){ var t=[]; for(var i=0;i<n;i++) t.push({label:"Time "+(i+1),players:[],soma:0,gk:false}); return t; }
 function posCount(team,pos){ var c=0; for(var i=0;i<team.players.length;i++){ if(team.players[i].pos===pos) c++; } return c; }
-function drawBalanced(pool,n){
-  if(pool.length<n) return {erro:"Poucos jogadores para "+n+" times ("+pool.length+" presentes)."};
-  var teams=emptyTeams(n), gks=[], others=[];
-  for(var i=0;i<pool.length;i++){ (pool[i].pos==="goleiro"?gks:others).push(pool[i]); }
-  gks.sort(function(a,b){return b.nota-a.nota;});
-  var ti=0; for(var g=0;g<gks.length;g++){ if(ti<n){ teams[ti].players.push(gks[g]); teams[ti].soma+=gks[g].nota; teams[ti].gk=true; ti++; } else others.push(gks[g]); }
-  others.sort(function(a,b){return b.nota-a.nota;});
-  for(var o=0;o<others.length;o++){ var pl=others[o], best=-1, bs=null;
-    for(var t=0;t<n;t++){ var key=[teams[t].soma, posCount(teams[t],pl.pos), teams[t].players.length];
-      if(best<0){ best=t; bs=key; continue; }
-      if(key[0]<bs[0]-0.0001 || (Math.abs(key[0]-bs[0])<=0.0001 && (key[1]<bs[1] || (key[1]===bs[1] && key[2]<bs[2])))){ best=t; bs=key; }
-    }
-    teams[best].players.push(pl); teams[best].soma+=pl.nota;
-  }
+function tPlace(team,pl){ team.players.push(pl); team.soma+=pl.nota; if(pl.pos==="goleiro") team.gk=true; }
+function cmpKey(a,b){ for(var i=0;i<a.length;i++){ if(a[i]<b[i]-0.0001) return -1; if(a[i]>b[i]+0.0001) return 1; } return 0; }
+function drawBalanced(pool,n,size){
+  if(pool.length<2) return {erro:"Poucos jogadores presentes ("+pool.length+")."};
+  n=Math.max(2,n);
+  var actualN = (size&&size>0) ? ((pool.length>n*size)? n : Math.min(n, Math.ceil(pool.length/size))) : n;
+  actualN=Math.max(1, Math.min(actualN, pool.length));
+  var counts=[];
+  if(size&&size>0 && pool.length<=n*size){ var rem0=pool.length; for(var t=0;t<actualN;t++){ var c=Math.min(size,rem0); counts.push(c); rem0-=c; } }
+  else { var baseC=Math.floor(pool.length/actualN), ex=pool.length%actualN; for(var t2=0;t2<actualN;t2++) counts.push(baseC+(t2<ex?1:0)); }
+  var teams=[]; for(var i=0;i<actualN;i++) teams.push({label:"Time "+(i+1),players:[],soma:0,gk:false,target:counts[i]});
+  var last=actualN-1;
+  function byNota(a,b){return b.nota-a.nota;}
+  function roomTot(t){ return teams[t].players.length<counts[t]; }
+  var mGk=[],mField=[],aGk=[],aField=[];
+  for(var p=0;p<pool.length;p++){ var x=pool[p]; if(x.isAvulso){ (x.pos==="goleiro"?aGk:aField).push(x);} else { (x.pos==="goleiro"?mGk:mField).push(x);} }
+  mGk.sort(byNota); mField.sort(byNota); aGk.sort(byNota); aField.sort(byNota);
+  // Fase A: goleiros — mensalistas primeiro (prefere times que jogam); avulso só cobre time que ficou sem goleiro
+  function assignGk(arr,leftArr){ for(var g=0;g<arr.length;g++){ var cands=[]; for(var t=0;t<actualN;t++){ if(!teams[t].gk && roomTot(t)) cands.push(t); } if(!cands.length){ leftArr.push(arr[g]); continue; } cands.sort(function(a,b){ var la=(a===last)?1:0, lb=(b===last)?1:0; return (la-lb)||(teams[a].soma-teams[b].soma); }); tPlace(teams[cands[0]], arr[g]); } }
+  assignGk(mGk, mField); assignGk(aGk, aField);
+  // reserva as vagas de avulso do último time pra trás; o resto é dos mensalistas
+  var rem=[]; for(var t3=0;t3<actualN;t3++) rem.push(counts[t3]-teams[t3].players.length);
+  var aAlloc=[]; for(var t3b=0;t3b<actualN;t3b++) aAlloc.push(0);
+  var aLeft=aField.length; for(var t3c=last;t3c>=0&&aLeft>0;t3c--){ var give=Math.min(rem[t3c],aLeft); aAlloc[t3c]=give; aLeft-=give; }
+  var mCap=[]; for(var t3d=0;t3d<actualN;t3d++) mCap.push(teams[t3d].players.length + (rem[t3d]-aAlloc[t3d]));
+  function roomM(t){ return teams[t].players.length<mCap[t]; }
+  // Fase B: >=1 de cada posição de linha nos times de mensalistas (secundária cobre)
+  var LINHA=["zaga","meio","ataque"];
+  function takeByPos(pos){ for(var r=0;r<mField.length;r++){ if(mField[r].pos===pos) return mField.splice(r,1)[0]; } for(var r2=0;r2<mField.length;r2++){ if(mField[r2].sec===pos) return mField.splice(r2,1)[0]; } return null; }
+  for(var lp=0;lp<LINHA.length;lp++){ var pos=LINHA[lp]; var alvo=[]; for(var t4=0;t4<actualN;t4++){ if(posCount(teams[t4],pos)===0 && roomM(t4)) alvo.push(t4); } alvo.sort(function(a,b){ var la=(a===last)?1:0, lb=(b===last)?1:0; return (la-lb)||(teams[a].soma-teams[b].soma); }); for(var q=0;q<alvo.length;q++){ var tt=alvo[q]; if(!roomM(tt)) continue; var pl=takeByPos(pos); if(!pl) break; tPlace(teams[tt],pl); } }
+  // Fase C: completa mensalistas por MÉDIA (nas vagas de mensalista)
+  mField.sort(byNota);
+  for(var o=0;o<mField.length;o++){ var pp=mField[o], b2=-1,bk=null; for(var t5=0;t5<actualN;t5++){ if(!roomM(t5)) continue; var avg=teams[t5].players.length?teams[t5].soma/teams[t5].players.length:-999; var key=[avg,posCount(teams[t5],pp.pos),teams[t5].players.length]; if(b2<0){b2=t5;bk=key;continue;} if(cmpKey(key,bk)<0){b2=t5;bk=key;} } if(b2<0){ for(var t6=0;t6<actualN;t6++){ if(roomTot(t6)){b2=t6;break;} } if(b2<0)b2=0; } tPlace(teams[b2],pp); }
+  // Fase D: avulsos nas vagas reservadas (equilibra entre si)
+  aField.sort(byNota);
+  for(var o2=0;o2<aField.length;o2++){ var ap=aField[o2], b3=-1,bk3=null; for(var t7=0;t7<actualN;t7++){ if(!roomTot(t7)) continue; var avg2=teams[t7].players.length?teams[t7].soma/teams[t7].players.length:-999; var key2=[avg2,posCount(teams[t7],ap.pos),teams[t7].players.length]; if(b3<0){b3=t7;bk3=key2;continue;} if(cmpKey(key2,bk3)<0){b3=t7;bk3=key2;} } if(b3<0)b3=0; tPlace(teams[b3],ap); }
+  for(var m=0;m<actualN;m++){ teams[m].incompleto = (size&&size>0) ? (teams[m].players.length<size) : false; }
   return {times:teams};
 }
 function drawTematico(pool,key){
@@ -440,8 +465,8 @@ function jogoGols(k){ var j=dbJogo(k); return j.gols; }
 function getGols(k,id){ return jogoGols(k)[id]||0; }
 function setGols(k,id,n){ var g=jogoGols(k); n=Math.max(0,n); if(n) g[id]=n; else delete g[id]; if(FB) jogoFieldWrite(k,"gols",id,(n?n:null)); }
 function golStepper(k,id){ var n=getGols(k,id); return '<div class="golstep"><button class="btn mini ghost" data-action="gol-dec" data-id="'+id+'" aria-label="menos gol">−</button><span class="golnum">⚽ '+n+'</span><button class="btn mini ghost" data-action="gol-inc" data-id="'+id+'" aria-label="mais gol">+</button></div>'; }
-function sorteioTexto(sr){ var cfg=dbConfig(), L=["⚽ Fute da firma — "+jogoLabel(sr.key)]; L.push((cfg.horaJogo||"")+(cfg.localJogo?" · "+cfg.localJogo:"")); L.push(""); var em=["🟢","🔵","🟡","🔴"];
-  for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0; L.push((em[i]||"⚪")+" "+tm.label+" (média "+avg.toFixed(1).replace(".",",")+")"+(tm.gk?"":" — revezam o gol")); for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j]; L.push("• "+posAbbr(pl.pos)+" "+pl.nome+(pl.isAvulso?" (avulso)":"")); } L.push(""); }
+function sorteioTexto(sr){ var cfg=dbConfig(), L=["⚽ Fute da firma — "+jogoLabel(sr.key)]; L.push((cfg.horaJogo||"")+(cfg.localJogo?" · "+cfg.localJogo:"")); L.push(""); var em=["🔴","🔵","🟡","🟣"];
+  for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0; L.push((em[i]||"⚪")+" "+tm.label+" (média "+avg.toFixed(1).replace(".",",")+")"+(tm.gk?"":" — revezam o gol")+(tm.incompleto?" — incompleto":"")); for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j]; L.push("• "+posAbbr(pl.pos)+" "+pl.nome+(pl.isAvulso?" (avulso)":"")); } L.push(""); }
   return L.join("\n").replace(/\n+$/,""); }
 function jogosRealizados(){ var arr=[],k; for(k in demoJogos){ var j=demoJogos[k], anyP=false,pk; for(pk in j.presenca){ if(j.presenca[pk]===true){anyP=true;break;} } if(j.encerrado||anyP) arr.push(k); } arr.sort(); return arr; }
 function statPresenca(uid){ var c=0,k; for(k in demoJogos){ if(demoJogos[k].presenca[uid]===true) c++; } return c; }
@@ -753,7 +778,7 @@ function renderAdmin(){
 function renderTesouraria(){
   var cfg=dbConfig(); if(!S.tesMes) S.tesMes=todayKey(); var mes=S.tesMes;
   var cx=caixaTotais(), mt=mesTotais(mes);
-  var all=dbAllPlayers(), mensalistas=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.mensalista && !p.isento && p.status==="aprovado") mensalistas.push(p); }
+  var all=dbAllPlayers(), mensalistas=[], isentos=0; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.status!=="aprovado") continue; if(p.mensalista && p.isento) isentos++; else if(p.mensalista) mensalistas.push(p); }
   var pagos=0; for(var j=0;j<mensalistas.length;j++){ var mn=dbMens(mensalistas[j].id,mes); if(mn&&mn.pago) pagos++; }
   var valor=cfg.valorMensalidade||0;
   var h=[];
@@ -768,7 +793,7 @@ function renderTesouraria(){
   h.push('<div class="tsum"><div class="k">Saídas</div><div class="v">'+formatBRL(mt.sai)+'</div></div>');
   h.push('<div class="tsum"><div class="k">Saldo mês</div><div class="v">'+formatBRL(mt.saldo)+'</div></div></div>');
   // Mensalistas
-  h.push('<div class="subhead" style="margin-top:6px">Mensalidades</div>');
+  h.push('<div class="subhead" style="margin-top:6px">Mensalidades'+(isentos>0?' <span class="muted" style="font-weight:600;text-transform:none;letter-spacing:0">· + '+isentos+' isento'+(isentos===1?'':'s')+'</span>':'')+'</div>');
   if(mensalistas.length===0) h.push('<div class="emptymsg">Nenhum mensalista aprovado ainda.</div>');
   for(var k=0;k<mensalistas.length;k++){ var q=mensalistas[k], m2=dbMens(q.id,mes), pg=!!(m2&&m2.pago);
     h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div>');
@@ -949,8 +974,9 @@ function renderAvaliar(){
 function renderSorteioResult(sr){
   if(sr.erro) return '<div class="warn" style="margin-top:14px">'+esc(sr.erro)+'</div>';
   var h=['<div style="margin-top:16px">'];
-  for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0;
-    h.push('<div class="teamcard"><div class="teamhead"><div class="teamname">'+esc(tm.label)+'</div><div class="teammeta">'+tm.players.length+' jog. · média '+avg.toFixed(1).replace(".",",")+(tm.gk?'':' · <span style="color:var(--amber)">revezam o gol</span>')+'</div></div>');
+  var TEAMCLR=[{bg:"#fdecea",bd:"#e74c3c",tx:"#c0392b"},{bg:"#e9f1fd",bd:"#2f6fed",tx:"#1f5fbf"},{bg:"#fef6e6",bd:"#e0a911",tx:"#a9790b"},{bg:"#efeafc",bd:"#7c5cdf",tx:"#5b3fc0"}];
+  for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0, clr=TEAMCLR[i%TEAMCLR.length];
+    h.push('<div class="teamcard" style="background:'+clr.bg+';border:1px solid '+clr.bd+'55"><div class="teamhead"><div class="teamname" style="color:'+clr.tx+'">'+esc(tm.label)+'</div><div class="teammeta">'+tm.players.length+' jog. · média '+avg.toFixed(1).replace(".",",")+(tm.gk?'':' · <span style="color:var(--amber)">revezam o gol</span>')+(tm.incompleto?' · <span style="color:var(--amber)">incompleto</span>':'')+'</div></div>');
     for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j];
       h.push('<div class="teamrow"><span class="badge pos" style="min-width:56px;justify-content:center">'+esc(posLabel(pl.pos))+'</span><span class="teampl">'+esc(pl.nome)+(pl.isAvulso?' <span class="badge pos2">avulso</span>':'')+'</span><span class="teamnota">'+starsDisplay(pl.nota,false)+'</span></div>');
     }
@@ -1008,7 +1034,7 @@ function renderJogos(){
   }
   if(av.length===0) h.push('<div class="emptymsg">Nenhum avulso neste jogo.</div>');
   if(demoAvulsos.length){ h.push('<div style="margin-top:12px"><div class="sub" style="margin-bottom:6px">Reaproveitar convidado:</div><div class="poschips">');
-    for(var w=0;w<demoAvulsos.length;w++){ h.push('<div class="poschip" data-action="av-fill" data-id="'+demoAvulsos[w].id+'">+ '+esc(demoAvulsos[w].nome)+'</div>'); }
+    for(var w=0;w<demoAvulsos.length;w++){ h.push('<div class="poschip" style="padding-right:4px">+ <span data-action="av-fill" data-id="'+demoAvulsos[w].id+'">'+esc(demoAvulsos[w].nome)+'</span> <span class="avdel" data-action="av-lista-del" data-id="'+demoAvulsos[w].id+'" data-nome="'+esc(demoAvulsos[w].nome)+'" title="Remover da lista">✕</span></div>'); }
     h.push('</div></div>'); }
   h.push('<div class="divider"></div><div class="subhead">Adicionar avulso</div>');
   h.push('<div class="field"><label for="av_nome">Nome</label><input id="av_nome" type="text" placeholder="Nome do convidado"></div>');
@@ -1024,10 +1050,13 @@ function renderJogos(){
 
   var pool=poolFor(k);
   h.push('<div class="panel"><div class="eyebrow">Times</div><h2 class="ph">Sorteio</h2>');
-  h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Usa os presentes deste jogo ('+pool.length+' jogador'+(pool.length===1?'':'es')+'). Marque a presença acima; sem presença marcada, usa os confirmados. Avulsos entram no bolo.</div>');
+  h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Sorteia só quem está marcado como <b>Presente</b> ('+pool.length+' jogador'+(pool.length===1?'':'es')+', incluindo avulsos). Quem confirmou mas não foi marcado presente fica de fora. Valide a presença acima antes de sortear.</div>');
   h.push('<div class="grid2"><div class="field"><label for="so_n">Nº de times</label><select id="so_n" class="selin">');
   for(var nt=2;nt<=4;nt++) h.push('<option value="'+nt+'">'+nt+' times</option>');
-  h.push('</select></div><div class="field"><label for="so_modo">Critério</label><select id="so_modo" class="selin"><option value="eq">Equilibrado (nota + posição)</option><option value="supt">Temático: por supt</option><option value="area">Temático: por área</option></select></div></div>');
+  h.push('</select></div><div class="field"><label for="so_size">Jogadores por time</label><select id="so_size" class="selin"><option value="0">Automático</option>');
+  for(var ts=4;ts<=8;ts++) h.push('<option value="'+ts+'">'+ts+' por time</option>');
+  h.push('</select></div></div>');
+  h.push('<div class="field"><label for="so_modo">Critério</label><select id="so_modo" class="selin"><option value="eq">Equilibrado (nota + posição)</option><option value="supt">Temático: por supt</option><option value="area">Temático: por área</option></select></div>');
   h.push('<div class="field"><label for="so_nota">Nota usada no equilíbrio</label><select id="so_nota" class="selin"><option value="u3"'+((S.sortNota||"u3")==="u3"?" selected":"")+'>Média das 3 últimas</option><option value="geral"'+(S.sortNota==="geral"?" selected":"")+'>Histórico completo</option></select></div>');
   h.push('<button class="btn" data-action="do-sorteio">Sortear times</button>');
   if(S.sorteio && S.sorteio.key===k) h.push(renderSorteioResult(S.sorteio));
@@ -1205,7 +1234,7 @@ document.addEventListener("click", function(ev){
   if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim() }); S.jogoSel=proximoJogoKey(); toast("Dia do jogo salvo"); render(); return; }
   if(act==="jogo-prev"){ S.jogoSel=shiftJogo(S.jogoSel,-1); S.sorteio=null; render(); return; }
   if(act==="jogo-next"){ S.jogoSel=shiftJogo(S.jogoSel,1); S.sorteio=null; render(); return; }
-  if(act==="do-sorteio"){ S.sortNota=val("so_nota")||"u3"; var n=parseInt(val("so_n"),10)||2, modo=val("so_modo"), pl=poolFor(S.jogoSel); var res=(modo==="eq")?drawBalanced(pl,n):drawTematico(pl, modo==="supt"?"supt":"area"); res.key=S.jogoSel; res.modo=modo; S.sorteio=res; render(); return; }
+  if(act==="do-sorteio"){ S.sortNota=val("so_nota")||"u3"; var n=parseInt(val("so_n"),10)||2, size=parseInt(val("so_size"),10)||0, modo=val("so_modo"), pl=poolFor(S.jogoSel); var res=(modo==="eq")?drawBalanced(pl,n,size):drawTematico(pl, modo==="supt"?"supt":"area"); res.key=S.jogoSel; res.modo=modo; S.sorteio=res; render(); return; }
   if(act==="gol-inc"){ setGols(S.jogoSel,id,getGols(S.jogoSel,id)+1); render(); return; }
   if(act==="gol-dec"){ setGols(S.jogoSel,id,getGols(S.jogoSel,id)-1); render(); return; }
   if(act==="share-sorteio"){ if(!S.sorteio||S.sorteio.erro){ toast("Sorteie os times primeiro"); return; } var txt=sorteioTexto(S.sorteio); if(navigator.share){ navigator.share({text:txt}).catch(function(){ shareModal(txt); }); } else { shareModal(txt); } return; }
@@ -1223,6 +1252,7 @@ document.addEventListener("click", function(ev){
   if(act==="clear-base"){ setBase(me().id, el.getAttribute("data-alvo"), 0); toast("Nota geral removida"); render(); return; }
   if(act==="pres-on"){ var jo=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jo.presenca[id]===true?null:true); render(); return; }
   if(act==="pres-off"){ var jf=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jf.presenca[id]===false?null:false); render(); return; }
+  if(act==="av-lista-del"){ var nm=el.getAttribute("data-nome")||"este convidado"; confirmModal("Remover convidado","Tirar \""+nm+"\" da lista de reaproveitar? (não afeta jogos já lançados)",function(){ for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id){ demoAvulsos.splice(ai,1); break; } } if(FB) db.collection("avulsos").doc(id).delete().catch(fbCatch()); closeModal(); toast("Convidado removido da lista"); render(); },true); return; }
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
   if(act==="add-avulso"){ var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
   if(act==="av-pago"){ var aa=findJogoAvulso(S.jogoSel,id); if(aa){ aa.pago=!aa.pago; if(FB) jogoArrWrite(S.jogoSel); toast(aa.pago?"Diária recebida — entrou no caixa":"Marcado em aberto"); render(); } return; }
