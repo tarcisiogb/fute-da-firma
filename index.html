@@ -402,8 +402,8 @@ function premioResultado(k,pr){
   var counts={},kk; for(kk in demoPremios){ var p=kk.split("|"); if(p[0]===k && p[2]===pr){ var a=demoPremios[kk]; counts[a]=(counts[a]||0)+1; } }
   return maxKeys(counts);
 }
-function titulosDe(id){ var t={},jr=jogosRealizados(),i,pr; for(i=0;i<jr.length;i++){ if(!jogoFechado(jr[i])) continue; for(pr=0;pr<PREMIOS.length;pr++){ var w=premioResultado(jr[i],PREMIOS[pr][0]); if(w.indexOf(id)>=0) t[PREMIOS[pr][0]]=(t[PREMIOS[pr][0]]||0)+1; } } return t; }
-function quadroHonra(){ var res={},jr=jogosRealizados(),i,pr,x; for(pr=0;pr<PREMIOS.length;pr++) res[PREMIOS[pr][0]]={}; for(i=0;i<jr.length;i++){ if(!jogoFechado(jr[i])) continue; for(pr=0;pr<PREMIOS.length;pr++){ var w=premioResultado(jr[i],PREMIOS[pr][0]); for(x=0;x<w.length;x++) res[PREMIOS[pr][0]][w[x]]=(res[PREMIOS[pr][0]][w[x]]||0)+1; } } return res; }
+function titulosDe(id){ var t={},jr=jogosRealizados(),i,pr; for(i=0;i<jr.length;i++){ for(pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0]; if(!premioAuto(pk) && !jogoFechado(jr[i])) continue; var w=premioResultado(jr[i],pk); if(w.indexOf(id)>=0) t[pk]=(t[pk]||0)+1; } } return t; }
+function quadroHonra(){ var res={},jr=jogosRealizados(),i,pr,x; for(pr=0;pr<PREMIOS.length;pr++) res[PREMIOS[pr][0]]={}; for(i=0;i<jr.length;i++){ for(pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0]; if(!premioAuto(pk) && !jogoFechado(jr[i])) continue; var w=premioResultado(jr[i],pk); for(x=0;x<w.length;x++) res[pk][w[x]]=(res[pk][w[x]]||0)+1; } } return res; }
 function nomeCurto(id){ var p=dbGet(id); return p?(p.apelido||p.nome):id; }
 function nomeQualquer(id){ var p=dbGet(id); if(p) return p.apelido||p.nome; for(var k in demoJogos){ var av=demoJogos[k].avulsos||[]; for(var i=0;i<av.length;i++) if(av[i].id===id) return av[i].nome; } return id; }
 function getComentario(k,autor,alvo){ return demoComentarios[k+"|"+autor+"|"+alvo]||""; }
@@ -1183,8 +1183,7 @@ function playerModal(id){
   h.push('<div class="mural"><div class="subhead" style="text-align:left;margin-bottom:8px">Mural</div>');
   if(cms.length===0) h.push('<div class="muted" style="font-size:12.5px;text-align:left">Ainda sem comentários.</div>');
   for(var ci=0;ci<cms.length;ci++){ var cm=cms[ci];
-    var titn=""; for(var pr=0;pr<PREMIOS.length;pr++){ if(premioResultado(cm.k,PREMIOS[pr][0]).indexOf(p.id)>=0) titn+=' <span class="titchip" style="padding:2px 7px">'+premioEmoji(PREMIOS[pr][0])+' '+esc(premioLabel(PREMIOS[pr][0]))+'</span>'; }
-    h.push('<div class="cmt"><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(jogoLabel(cm.k))+'</span>'+titn+'</div>');
+    h.push('<div class="cmt"><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(jogoLabel(cm.k))+'</span></div>');
     h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
     if(cm.autor===meU.id || amAdmV){ h.push('<div class="cmtacts">'+(cm.autor===meU.id?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+p.id+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+p.id+'">apagar</span></div>'); }
     h.push('</div>');
