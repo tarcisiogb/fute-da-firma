@@ -320,6 +320,7 @@ var demoNotas = {};    // "jogoKey|avaliadorUid|alvoUid" -> nota 1-5 (nota seman
 var demoPremios = {};  // "jogoKey|votanteUid|premio" -> alvoUid
 var demoBase = {};     // "avaliadorUid|alvoUid" -> nota base 1-5 (anônima, editável, só no Geral)
 var demoComentarios = {}; // "jogoKey|autorUid|alvoUid" -> texto (identificado)
+var demoComentTime = {}; // mesma chave -> data de criação (ms), só na criação
 
 function dbAllPlayers(){ return demoPlayers.slice(); }
 function dbGet(id){ var a=dbAllPlayers(); for(var i=0;i<a.length;i++){ if(a[i].id===id) return a[i]; } return null; }
@@ -409,15 +410,24 @@ function quadroHonra(){ var res={},jr=jogosRealizados(),i,pr,x; for(pr=0;pr<PREM
 function nomeCurto(id){ var p=dbGet(id); return p?(p.apelido||p.nome):id; }
 function nomeQualquer(id){ var p=dbGet(id); if(p) return p.apelido||p.nome; for(var k in demoJogos){ var av=demoJogos[k].avulsos||[]; for(var i=0;i<av.length;i++) if(av[i].id===id) return av[i].nome; } return id; }
 function getComentario(k,autor,alvo){ return demoComentarios[k+"|"+autor+"|"+alvo]||""; }
-function setComentario(k,autor,alvo,txt){ var key=k+"|"+autor+"|"+alvo; txt=(txt||"").trim(); if(txt) demoComentarios[key]=txt; else delete demoComentarios[key]; if(FB){ var ref=db.collection("jogos").doc(k).collection("comentarios").doc(autor+"_"+alvo); if(txt) ref.set({autor:autor,alvo:alvo,texto:txt}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
+function setComentario(k,autor,alvo,txt){ var key=k+"|"+autor+"|"+alvo; txt=(txt||"").trim(); var novo=!demoComentarios[key]; if(txt){ demoComentarios[key]=txt; if(novo) demoComentTime[key]=Date.now(); } else { delete demoComentarios[key]; delete demoComentTime[key]; } if(FB){ var ref=db.collection("jogos").doc(k).collection("comentarios").doc(autor+"_"+alvo); if(txt){ var payload={autor:autor,alvo:alvo,texto:txt}; if(novo) payload.criadoEm=Date.now(); ref.set(payload,{merge:true}).catch(fbCatch()); } else ref.delete().catch(fbCatch()); } }
+function comentTime(k,autor,alvo){ return demoComentTime[k+"|"+autor+"|"+alvo]||0; }
+function novosComentarios(uid){ var u=dbGet(uid); if(!u) return []; var vistos=u.comentVistosEm||0, cms=comentariosDe(uid), r=[]; for(var i=0;i<cms.length;i++){ if(comentTime(cms[i].k,cms[i].autor,uid)>vistos) r.push(cms[i]); } return r; }
+function marcarComentVistos(uid){ var u=dbGet(uid); if(!u) return; dbUpdate(uid,{comentVistosEm:Date.now()}); }
 function comentariosDe(alvo){ var r=[],kk; for(kk in demoComentarios){ var p=kk.split("|"); if(p[2]===alvo) r.push({k:p[0],autor:p[1],alvo:alvo,texto:demoComentarios[kk]}); } r.sort(function(a,b){ return a.k<b.k?1:(a.k>b.k?-1:0); }); return r; }
 
 /* Sorteio de times */
 function poolFor(k){
   var j=dbJogo(k);
   var all=dbAllPlayers(), pool=[];
-  for(var i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue; if(j.presenca[p.id]!==true) continue; var ni=notaRanking(p, S.sortNota||"u3"); pool.push({id:p.id,nome:nomeExibTxt(p),pos:p.posPrincipal,sec:p.posSecundaria||null,nota:ni.value,supt:p.supt,area:p.area,isAvulso:false}); }
-  for(var a=0;a<j.avulsos.length;a++){ var b=j.avulsos[a]; pool.push({id:b.id,nome:b.nome,pos:b.posPrincipal,sec:b.posSecundaria||null,nota:b.nota||3,supt:null,area:null,isAvulso:true}); }
+  for(var i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue;
+    var pres=j.presenca[p.id];
+    if(pres===false) continue;                                   // marcado "Faltou" -> fora
+    if(pres!==true && j.confirm[p.id]!=="sim") continue;         // nem presente, nem confirmou -> fora
+    var ni=notaRanking(p, S.sortNota||"u3");
+    pool.push({id:p.id,nome:nomeExibTxt(p),pos:p.posPrincipal,sec:p.posSecundaria||null,nota:ni.value,supt:p.supt,area:p.area,isAvulso:false,absent:(pres!==true)});
+  }
+  for(var a=0;a<j.avulsos.length;a++){ var b=j.avulsos[a]; pool.push({id:b.id,nome:b.nome,pos:b.posPrincipal,sec:b.posSecundaria||null,nota:b.nota||3,supt:null,area:null,isAvulso:true,absent:false}); }
   return pool;
 }
 function emptyTeams(n){ var t=[]; for(var i=0;i<n;i++) t.push({label:"Time "+(i+1),players:[],soma:0,gk:false}); return t; }
@@ -427,8 +437,11 @@ function cmpKey(a,b){ for(var i=0;i<a.length;i++){ if(a[i]<b[i]-0.0001) return -
 function drawBalanced(pool,n,size){
   if(pool.length<2) return {erro:"Poucos jogadores presentes ("+pool.length+")."};
   n=Math.max(2,n);
+  var tentN = (size&&size>0) ? ((pool.length>n*size)? n : Math.min(n, Math.ceil(pool.length/size))) : n;
+  if(tentN<3){ pool = pool.filter(function(p){ return !p.absent; }); if(pool.length<2) return {erro:"Poucos jogadores presentes ("+pool.length+")."}; }
   var actualN = (size&&size>0) ? ((pool.length>n*size)? n : Math.min(n, Math.ceil(pool.length/size))) : n;
   actualN=Math.max(1, Math.min(actualN, pool.length));
+  var last0=actualN-1;
   var counts=[];
   if(size&&size>0 && pool.length<=n*size){ var rem0=pool.length; for(var t=0;t<actualN;t++){ var c=Math.min(size,rem0); counts.push(c); rem0-=c; } }
   else { var baseC=Math.floor(pool.length/actualN), ex=pool.length%actualN; for(var t2=0;t2<actualN;t2++) counts.push(baseC+(t2<ex?1:0)); }
@@ -437,8 +450,10 @@ function drawBalanced(pool,n,size){
   function byNota(a,b){return b.nota-a.nota;}
   function roomTot(t){ return teams[t].players.length<counts[t]; }
   var mGk=[],mField=[],aGk=[],aField=[];
-  for(var p=0;p<pool.length;p++){ var x=pool[p]; if(x.isAvulso){ (x.pos==="goleiro"?aGk:aField).push(x);} else { (x.pos==="goleiro"?mGk:mField).push(x);} }
-  mGk.sort(byNota); mField.sort(byNota); aGk.sort(byNota); aField.sort(byNota);
+  for(var p=0;p<pool.length;p++){ var x=pool[p]; var back = x.isAvulso || x.absent; if(back){ (x.pos==="goleiro"?aGk:aField).push(x);} else { (x.pos==="goleiro"?mGk:mField).push(x);} }
+  function porAbsentNota(a,b){ var aa=a.absent?1:0, ab=b.absent?1:0; return (aa-ab)||(b.nota-a.nota); }
+  aGk.sort(porAbsentNota); aField.sort(porAbsentNota);
+  mGk.sort(byNota); mField.sort(byNota);
   // Fase A: goleiros — mensalistas primeiro (prefere times que jogam); avulso só cobre time que ficou sem goleiro
   function assignGk(arr,leftArr){ for(var g=0;g<arr.length;g++){ var cands=[]; for(var t=0;t<actualN;t++){ if(!teams[t].gk && roomTot(t)) cands.push(t); } if(!cands.length){ leftArr.push(arr[g]); continue; } cands.sort(function(a,b){ var la=(a===last)?1:0, lb=(b===last)?1:0; return (la-lb)||(teams[a].soma-teams[b].soma); }); tPlace(teams[cands[0]], arr[g]); } }
   assignGk(mGk, mField); assignGk(aGk, aField);
@@ -448,16 +463,17 @@ function drawBalanced(pool,n,size){
   var aLeft=aField.length; for(var t3c=last;t3c>=0&&aLeft>0;t3c--){ var give=Math.min(rem[t3c],aLeft); aAlloc[t3c]=give; aLeft-=give; }
   var mCap=[]; for(var t3d=0;t3d<actualN;t3d++) mCap.push(teams[t3d].players.length + (rem[t3d]-aAlloc[t3d]));
   function roomM(t){ return teams[t].players.length<mCap[t]; }
-  // Fase B: >=1 de cada posição de linha nos times de mensalistas (secundária cobre)
+  // Fase D: back (a caminho + avulsos) primeiro, nas vagas reservadas do fim (equilibra pela SOMA)
+  aField.sort(byNota);
+  var bcount=[]; for(var bi=0;bi<actualN;bi++) bcount.push(0);
+  for(var o2=0;o2<aField.length;o2++){ var ap=aField[o2], minIdx=(ap.absent?2:0), b3=-1,bk3=null; for(var t7=minIdx;t7<actualN;t7++){ if(bcount[t7]>=aAlloc[t7]) continue; var key2=[teams[t7].soma,posCount(teams[t7],ap.pos),teams[t7].players.length]; if(b3<0){b3=t7;bk3=key2;continue;} if(cmpKey(key2,bk3)<0){b3=t7;bk3=key2;} } if(b3<0){ for(var t7b=minIdx;t7b<actualN;t7b++){ if(roomTot(t7b)){b3=t7b;break;} } } if(b3<0){ for(var t7c=0;t7c<actualN;t7c++){ if(roomTot(t7c)){b3=t7c;break;} } if(b3<0)b3=0; } tPlace(teams[b3],ap); bcount[b3]++; }
+  // Fase B: >=1 de cada posição de linha nos times de presentes (secundária cobre)
   var LINHA=["zaga","meio","ataque"];
   function takeByPos(pos){ for(var r=0;r<mField.length;r++){ if(mField[r].pos===pos) return mField.splice(r,1)[0]; } for(var r2=0;r2<mField.length;r2++){ if(mField[r2].sec===pos) return mField.splice(r2,1)[0]; } return null; }
   for(var lp=0;lp<LINHA.length;lp++){ var pos=LINHA[lp]; var alvo=[]; for(var t4=0;t4<actualN;t4++){ if(posCount(teams[t4],pos)===0 && roomM(t4)) alvo.push(t4); } alvo.sort(function(a,b){ var la=(a===last)?1:0, lb=(b===last)?1:0; return (la-lb)||(teams[a].soma-teams[b].soma); }); for(var q=0;q<alvo.length;q++){ var tt=alvo[q]; if(!roomM(tt)) continue; var pl=takeByPos(pos); if(!pl) break; tPlace(teams[tt],pl); } }
-  // Fase C: completa mensalistas por MÉDIA (nas vagas de mensalista)
+  // Fase C: presentes completam equilibrando pela SOMA de TODOS os times (o time reforçado recebe os mais leves)
   mField.sort(byNota);
-  for(var o=0;o<mField.length;o++){ var pp=mField[o], b2=-1,bk=null; for(var t5=0;t5<actualN;t5++){ if(!roomM(t5)) continue; var avg=teams[t5].players.length?teams[t5].soma/teams[t5].players.length:-999; var key=[avg,posCount(teams[t5],pp.pos),teams[t5].players.length]; if(b2<0){b2=t5;bk=key;continue;} if(cmpKey(key,bk)<0){b2=t5;bk=key;} } if(b2<0){ for(var t6=0;t6<actualN;t6++){ if(roomTot(t6)){b2=t6;break;} } if(b2<0)b2=0; } tPlace(teams[b2],pp); }
-  // Fase D: avulsos nas vagas reservadas (equilibra entre si)
-  aField.sort(byNota);
-  for(var o2=0;o2<aField.length;o2++){ var ap=aField[o2], b3=-1,bk3=null; for(var t7=0;t7<actualN;t7++){ if(!roomTot(t7)) continue; var avg2=teams[t7].players.length?teams[t7].soma/teams[t7].players.length:-999; var key2=[avg2,posCount(teams[t7],ap.pos),teams[t7].players.length]; if(b3<0){b3=t7;bk3=key2;continue;} if(cmpKey(key2,bk3)<0){b3=t7;bk3=key2;} } if(b3<0)b3=0; tPlace(teams[b3],ap); }
+  for(var o=0;o<mField.length;o++){ var pp=mField[o], b2=-1,bk=null; for(var t5=0;t5<actualN;t5++){ if(!roomTot(t5)) continue; var key=[teams[t5].soma,posCount(teams[t5],pp.pos),teams[t5].players.length]; if(b2<0){b2=t5;bk=key;continue;} if(cmpKey(key,bk)<0){b2=t5;bk=key;} } if(b2<0)b2=0; tPlace(teams[b2],pp); }
   for(var m=0;m<actualN;m++){ teams[m].incompleto = (size&&size>0) ? (teams[m].players.length<size) : false; }
   return {times:teams};
 }
@@ -482,7 +498,7 @@ function setAssist(k,id,n){ var g=jogoAssist(k); n=Math.max(0,n); if(n) g[id]=n;
 function astStepper(k,id){ var n=getAssist(k,id); return '<div class="golstep"><button class="btn mini ghost" data-action="ast-dec" data-id="'+id+'" aria-label="menos assistência">−</button><span class="golnum">👟 '+n+'</span><button class="btn mini ghost" data-action="ast-inc" data-id="'+id+'" aria-label="mais assistência">+</button></div>'; }
 function statStepper(k,id){ return golStepper(k,id)+astStepper(k,id); }
 function sorteioTexto(sr){ var cfg=dbConfig(), L=["⚽ Fute da firma — "+jogoLabel(sr.key)]; L.push((cfg.horaJogo||"")+(cfg.localJogo?" · "+cfg.localJogo:"")); L.push(""); var em=["🔴","🔵","🟡","🟣"];
-  for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0; L.push((em[i]||"⚪")+" "+tm.label+" (média "+avg.toFixed(1).replace(".",",")+")"+(tm.gk?"":" — revezam o gol")+(tm.incompleto?" — incompleto":"")); for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j]; L.push("• "+posAbbr(pl.pos)+" "+pl.nome+(pl.isAvulso?" (avulso)":"")); } L.push(""); }
+  for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0; L.push((em[i]||"⚪")+" "+tm.label+" (média "+avg.toFixed(1).replace(".",",")+")"+(tm.gk?"":" — revezam o gol")+(tm.incompleto?" — incompleto":"")); for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j]; L.push("• "+posAbbr(pl.pos)+" "+pl.nome+(pl.isAvulso?" (avulso)":"")+(pl.absent?" (a caminho)":"")); } L.push(""); }
   return L.join("\n").replace(/\n+$/,""); }
 function jogosRealizados(){ var arr=[],k; for(k in demoJogos){ var j=demoJogos[k], anyP=false,pk; for(pk in j.presenca){ if(j.presenca[pk]===true){anyP=true;break;} } if(j.encerrado||anyP) arr.push(k); } arr.sort(); return arr; }
 function statPresenca(uid){ var c=0,k; for(k in demoJogos){ if(demoJogos[k].presenca[uid]===true) c++; } return c; }
@@ -543,7 +559,7 @@ function subscribeAll(){ if(S._subscribed) return; S._subscribed=true;
   db.collectionGroup("notas").onSnapshot(function(qs){ demoNotas={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.avaliador&&o.alvo&&o.nota) demoNotas[jk+"|"+o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
   db.collectionGroup("premios").onSnapshot(function(qs){ demoPremios={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id, vt=o.votante||d.id, vs=o.votos||{}; for(var pr in vs){ if(vs[pr]) demoPremios[jk+"|"+vt+"|"+pr]=vs[pr]; } }); render(); }, fbCatch());
   db.collection("notasbase").onSnapshot(function(qs){ demoBase={}; qs.forEach(function(d){ var o=d.data(); if(o.avaliador&&o.alvo&&o.nota) demoBase[o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
-  db.collectionGroup("comentarios").onSnapshot(function(qs){ demoComentarios={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.autor&&o.alvo&&o.texto) demoComentarios[jk+"|"+o.autor+"|"+o.alvo]=o.texto; }); render(); }, fbCatch());
+  db.collectionGroup("comentarios").onSnapshot(function(qs){ demoComentarios={}; demoComentTime={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.autor&&o.alvo&&o.texto){ var kk=jk+"|"+o.autor+"|"+o.alvo; demoComentarios[kk]=o.texto; demoComentTime[kk]=o.criadoEm||0; } }); render(); }, fbCatch());
 }
 
 /* =====================================================================
@@ -682,7 +698,8 @@ function renderHeader(u){
 }
 function renderTabs(){
   var h=['<nav class="tabs">'];
-  h.push('<button data-action="app-tab" data-tab="inicio" class="'+(S.appTab==="inicio"?"on":"")+'">Início</button>');
+  var uMe=me(), nNov=(uMe?novosComentarios(uMe.id).length:0);
+  h.push('<button data-action="app-tab" data-tab="inicio" class="'+(S.appTab==="inicio"?"on":"")+'">Início'+(nNov?' <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#c0392b;vertical-align:middle"></span>':'')+'</button>');
   h.push('<button data-action="app-tab" data-tab="cadastro" class="'+(S.appTab==="cadastro"?"on":"")+'">Meu cadastro</button>');
   h.push('<button data-action="app-tab" data-tab="ranking" class="'+(S.appTab==="ranking"?"on":"")+'">Ranking</button>');
   h.push('<button data-action="app-tab" data-tab="stats" class="'+(S.appTab==="stats"?"on":"")+'">Estatísticas</button>');
@@ -721,9 +738,11 @@ function renderInicio(u){
   h.push('<div class="muted" style="margin-top:12px">'+(niU.base==="jogos"?('Média geral com '+niU.n+' jogo'+(niU.n===1?'':'s')+(niU.baseIncl?' + a nota base dos colegas':'')+'.'):'Sua nota aparece quando os colegas avaliarem (a partir de 3 avaliações).')+'</div></div>');
   h.push(proximoJogoCard(u));
   h.push(avaliarCard(u));
+  h.push(comentNotifCard(u));
   h.push(mensalidadeCard(u));
   return h.join("");
 }
+function comentNotifCard(u){ var nov=novosComentarios(u.id); if(!nov.length) return ""; var aut={},n; for(var i=0;i<nov.length;i++) aut[nov[i].autor]=1; var qa=0; for(n in aut) qa++; return '<div class="panel" style="border-left:4px solid var(--amber)"><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:16px">💬 '+nov.length+' comentário'+(nov.length>1?'s':'')+' novo'+(nov.length>1?'s':'')+' pra você</div><div class="muted" style="margin:4px 0 12px">'+qa+' colega'+(qa>1?'s deixaram':' deixou')+' recado no seu mural.</div><button class="btn ok" data-action="ver-meus-comentarios">Ver no meu perfil</button></div>'; }
 function avaliarCard(u){
   if(!u.mensalista) return "";
   var k=proximoJogoKey(), cand=null;
@@ -1001,7 +1020,7 @@ function renderSorteioResult(sr){
   for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0, clr=TEAMCLR[i%TEAMCLR.length];
     h.push('<div class="teamcard" style="background:'+clr.bg+';border:1px solid '+clr.bd+'55"><div class="teamhead"><div class="teamname" style="color:'+clr.tx+'">'+esc(tm.label)+'</div><div class="teammeta">'+tm.players.length+' jog. · média '+avg.toFixed(1).replace(".",",")+(tm.gk?'':' · <span style="color:var(--amber)">revezam o gol</span>')+(tm.incompleto?' · <span style="color:var(--amber)">incompleto</span>':'')+'</div></div>');
     for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j];
-      h.push('<div class="teamrow"><span class="badge pos" style="min-width:56px;justify-content:center">'+esc(posLabel(pl.pos))+'</span><span class="teampl">'+esc(pl.nome)+(pl.isAvulso?' <span class="badge pos2">avulso</span>':'')+'</span><span class="teamnota">'+starsDisplay(pl.nota,false)+'</span></div>');
+      h.push('<div class="teamrow"><span class="badge pos" style="min-width:56px;justify-content:center">'+esc(posLabel(pl.pos))+'</span><span class="teampl">'+esc(pl.nome)+(pl.isAvulso?' <span class="badge pos2">avulso</span>':'')+(pl.absent?' <span class="badge pos2" style="background:#fff3e0;color:#a9790b">a caminho</span>':'')+'</span><span class="teamnota">'+starsDisplay(pl.nota,false)+'</span></div>');
     }
     h.push('</div>');
   }
@@ -1073,7 +1092,7 @@ function renderJogos(){
 
   var pool=poolFor(k);
   h.push('<div class="panel"><div class="eyebrow">Times</div><h2 class="ph">Sorteio</h2>');
-  h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Sorteia só quem está marcado como <b>Presente</b> ('+pool.length+' jogador'+(pool.length===1?'':'es')+', incluindo avulsos). Quem confirmou mas não foi marcado presente fica de fora. Valide a presença acima antes de sortear.</div>');
+  h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Os <b>presentes</b> começam jogando (Times 1 e 2). Quem <b>confirmou mas ainda não chegou</b> ("a caminho") entra pra compor <b>do 3º time em diante</b>, equilibrando as médias — com 2 times, esses ficam de fora. Quem marcou <b>Faltou</b> ou não confirmou não entra.</div>');
   h.push('<div class="grid2"><div class="field"><label for="so_n">Nº de times</label><select id="so_n" class="selin">');
   for(var nt=2;nt<=4;nt++) h.push('<option value="'+nt+'">'+nt+' times</option>');
   h.push('</select></div><div class="field"><label for="so_size">Jogadores por time</label><select id="so_size" class="selin"><option value="0">Automático</option>');
@@ -1182,16 +1201,18 @@ function playerModal(id){
   if(p.telefone) h.push('<div class="muted" style="margin-top:12px">'+esc(p.telefone)+'</div>');
   // Mural de comentários
   var cms=comentariosDe(p.id), meU=me(), amAdmV=amAdm();
+  var ehMeu=(meU && p.id===meU.id), vistosAntes=(ehMeu?(p.comentVistosEm||0):Infinity);
   h.push('<div class="mural"><div class="subhead" style="text-align:left;margin-bottom:8px">Mural</div>');
   if(cms.length===0) h.push('<div class="muted" style="font-size:12.5px;text-align:left">Ainda sem comentários.</div>');
-  for(var ci=0;ci<cms.length;ci++){ var cm=cms[ci];
-    h.push('<div class="cmt"><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(jogoLabel(cm.k))+'</span></div>');
+  for(var ci=0;ci<cms.length;ci++){ var cm=cms[ci]; var novo=(comentTime(cm.k,cm.autor,p.id)>vistosAntes);
+    h.push('<div class="cmt"'+(novo?' style="background:#fff8e6;border-color:#f0d48a"':'')+'><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(jogoLabel(cm.k))+'</span>'+(novo?' <span class="badge pos2" style="background:#fdecea;color:#c0392b">novo</span>':'')+'</div>');
     h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
     if(cm.autor===meU.id || amAdmV){ h.push('<div class="cmtacts">'+(cm.autor===meU.id?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+p.id+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+p.id+'">apagar</span></div>'); }
     h.push('</div>');
   }
   h.push('</div>');
   h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join("");
+  if(ehMeu && novosComentarios(p.id).length) marcarComentVistos(p.id);
 }
 function shareModal(txt){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Compartilhar times</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
 function comentarioModal(k,alvo){ var u=me(), cur=getComentario(k,u.id,alvo), alv=dbGet(alvo);
@@ -1232,6 +1253,7 @@ document.addEventListener("click", function(ev){
   if(act==="pick-foto"){ syncEditInputs(); document.getElementById("fotoInput").click(); return; }
   if(act==="rem-foto"){ syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=null; if(me()) dbUpdate(me().id,{foto:null}); toast("Foto removida"); render(); return; }
   if(act==="view-player"){ playerModal(el.getAttribute("data-id")); return; }
+  if(act==="ver-meus-comentarios"){ playerModal(S.sessionId); return; }
   if(act==="save-cadastro"){ saveCadastro(); return; }
 
   if(act==="approve"){ dbUpdate(id,{status:"aprovado"}); toast("Cadastro aprovado"); render(); return; }
@@ -1352,6 +1374,8 @@ function seedDemo(){ if(!DEMO) return; var m=todayKey(), pm=shiftMonth(m,-1);
   demoComentarios[past+"|u_master|u_bruno"]="Monstro no ataque, decidiu o jogo!";
   demoComentarios[past+"|u_diego|u_bruno"]="Faltou passar a bola às vezes, mas jogou muito.";
   demoComentarios[past+"|u_bruno|u_diego"]="Pegou dois pênaltis, muralha mesmo.";
+  demoComentarios[past+"|u_bruno|u_master"]="Craque, obrigado pelas assistências!"; demoComentTime[past+"|u_bruno|u_master"]=Date.now();
+  demoComentarios[past+"|u_diego|u_master"]="Comandante de sempre."; demoComentTime[past+"|u_diego|u_master"]=Date.now();
 }
 if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); render(); }
 else { if(DEMO) seedDemo(); render(); }
