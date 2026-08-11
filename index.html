@@ -268,7 +268,7 @@ var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebr
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
 var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 var WEEKDAYS = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-var PREMIOS = [["craque","Craque da rodada","🏆"],["muralha","Muralha","🧤"],["garcom","Garçom","🎩"],["acougueiro","Açougueiro","🔪"],["bolamurcha","Bola murcha","🎈"],["fominha","Fominha","🍽️"]];
+var PREMIOS = [["craque","Craque da rodada","🏆"],["muralha","Muralha","🧤"],["garcom","Garçom","🎩"],["golbonito","Gol mais bonito","⚽✨"],["acougueiro","Açougueiro","🔪"],["bolamurcha","Bola murcha","🎈"],["fominha","Fominha","🍽️"]];
 function premioLabel(k){ for(var i=0;i<PREMIOS.length;i++) if(PREMIOS[i][0]===k) return PREMIOS[i][1]; return k; }
 function premioEmoji(k){ for(var i=0;i<PREMIOS.length;i++) if(PREMIOS[i][0]===k) return PREMIOS[i][2]; return "🏅"; }
 
@@ -368,6 +368,7 @@ function mesTotais(mes){ var ent=0,sai=0,k; for(k in demoMensalidades){ if(k.sli
 
 /* Avaliações entre jogadores (anônimas) */
 function presentesReg(k){ var j=dbJogo(k), all=dbAllPlayers(), r=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.status==="aprovado" && j.presenca[p.id]===true) r.push(p); } return r; }
+function candidatosJogo(k){ var j=dbJogo(k), out=presentesReg(k).slice(); for(var i=0;i<j.avulsos.length;i++){ var b=j.avulsos[i]; out.push({id:b.id, apelido:b.nome, nome:b.nome, posPrincipal:b.posPrincipal, posSecundaria:b.posSecundaria||null, isAvulso:true}); } return out; }
 function getNota(k,av,al){ return demoNotas[k+"|"+av+"|"+al]||0; }
 function setNota(k,av,al,n){ var key=k+"|"+av+"|"+al; if(n) demoNotas[key]=n; else delete demoNotas[key]; if(FB){ var ref=db.collection("jogos").doc(k).collection("notas").doc(av+"_"+al); if(n) ref.set({avaliador:av,alvo:al,nota:n}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
 function notasRecebidas(k,al){ var r=[],kk; for(kk in demoNotas){ var p=kk.split("|"); if(p[0]===k && p[2]===al) r.push(demoNotas[kk]); } return r; }
@@ -728,8 +729,8 @@ function avaliarCard(u){
   var keys=[k, shiftJogo(k,-1)];
   for(var i=0;i<keys.length;i++){ var kk=keys[i]; if(jogoAvaliavel(kk)){ var j=dbJogoPeek(kk); if(j && j.presenca[u.id]===true){ cand=kk; break; } } }
   if(!cand) return "";
-  var pres=presentesReg(cand), feitas=0; for(var p=0;p<pres.length;p++){ if(pres[p].id!==u.id && getNota(cand,u.id,pres[p].id)) feitas++; }
-  var total=pres.length-1;
+  var cds=candidatosJogo(cand), feitas=0; for(var p=0;p<cds.length;p++){ if(cds[p].id!==u.id && getNota(cand,u.id,cds[p].id)) feitas++; }
+  var total=cds.length-1;
   var h=['<div class="panel" style="border:1px solid var(--grass)"><div class="eyebrow">Avaliação da rodada</div>'];
   h.push('<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:4px"><div><div style="font-weight:700;font-size:15px;text-transform:capitalize">'+esc(jogoLabel(cand))+'</div><div class="muted" style="margin-top:2px">fecha em '+esc(fmtPrazo(cand))+' · '+feitas+'/'+total+' notas dadas</div></div>');
   h.push('<button class="btn small" data-action="avaliar-open" data-k="'+cand+'">Avaliar</button></div></div>');
@@ -965,15 +966,15 @@ function renderRanking(){
   h.push('</div>'); return h.join("");
 }
 function renderAvaliar(){
-  var k=S.avaliarJogo, u=me(), pres=presentesReg(k);
+  var k=S.avaliarJogo, u=me(), cands=candidatosJogo(k);
   var h=['<div class="panel"><div class="eyebrow">Avaliação da rodada</div><h2 class="ph" style="text-transform:capitalize">'+esc(jogoLabel(k))+'</h2>'];
   h.push('<div class="muted" style="margin-top:4px">Avalie os presentes e vote nos prêmios. Fecha em <b>'+esc(fmtPrazo(k))+'</b>. Ninguém vê quem votou/avaliou o quê.</div>');
   h.push('<div style="margin-top:12px"><button class="btn ghost small" data-action="avaliar-close">← Voltar</button></div></div>');
   // Notas
   h.push('<div class="panel"><div class="subhead">Notas (1 a 5)</div>');
   var got=false;
-  for(var i=0;i<pres.length;i++){ var q=pres[i]; if(q.id===u.id) continue; got=true; var cur=getNota(k,u.id,q.id); var jaCom=getComentario(k,u.id,q.id);
-    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+posPairBadges(q)+' <span class="cmtlink" data-action="cmt-open" data-k="'+k+'" data-alvo="'+q.id+'">💬 '+(jaCom?"editar comentário":"comentar")+'</span></div></div>');
+  for(var i=0;i<cands.length;i++){ var q=cands[i]; if(q.id===u.id) continue; got=true; var cur=getNota(k,u.id,q.id); var jaCom=getComentario(k,u.id,q.id);
+    h.push('<div class="prow">'+(q.isAvulso?'<div class="pav">'+esc(initials(q.nome))+'</div>':avatarTag(q,"pav"))+'<div class="pinfo"><div class="pname">'+nomeExib(q)+(q.isAvulso?' <span class="badge pos2">avulso</span>':'')+'</div><div class="pmeta">'+posPairBadges(q)+(q.isAvulso?'':' <span class="cmtlink" data-action="cmt-open" data-k="'+k+'" data-alvo="'+q.id+'">💬 '+(jaCom?"editar comentário":"comentar")+'</span>')+'</div></div>');
     h.push('<div class="pacts" style="align-items:center"><div class="starsin" style="gap:4px">');
     for(var s=1;s<=5;s++){ h.push('<span class="starin '+(s<=cur?"on":"")+'" style="font-size:26px" data-action="set-nota" data-alvo="'+q.id+'" data-val="'+s+'">★</span>'); }
     h.push('</div>'); if(cur) h.push('<button class="btn mini ghost" data-action="clear-nota" data-alvo="'+q.id+'">limpar</button>');
@@ -986,7 +987,7 @@ function renderAvaliar(){
   h.push('<div class="muted" style="margin:6px 0 10px">🏆 <b>Craque</b> (mais gols) e 🎩 <b>Garçom</b> (mais assistências) são automáticos, pela contagem do jogo. Os demais você vota abaixo (empate divide o título).</div>');
   for(var pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0]; if(premioAuto(pk)) continue; var voto=getVoto(k,u.id,pk);
     h.push('<div style="margin-top:14px"><div style="font-weight:700;font-size:14px">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div><div class="poschips" style="margin-top:8px">');
-    for(var c=0;c<pres.length;c++){ var cand=pres[c]; var on=voto===cand.id?" on":""; h.push('<div class="poschip'+on+'" data-action="premio-vote" data-k="'+esc(pk)+'" data-alvo="'+cand.id+'">'+esc(cand.apelido||cand.nome)+'</div>'); }
+    for(var c=0;c<cands.length;c++){ var cand=cands[c]; var on=voto===cand.id?" on":""; h.push('<div class="poschip'+on+'" data-action="premio-vote" data-k="'+esc(pk)+'" data-alvo="'+cand.id+'">'+esc(cand.apelido||cand.nome)+(cand.isAvulso?' ·avulso':'')+'</div>'); }
     h.push('</div></div>');
   }
   h.push('</div>'); return h.join("");
@@ -1294,7 +1295,7 @@ document.addEventListener("click", function(ev){
   if(act==="copy-acesso"){ var cp=dbGet(id); if(navigator.clipboard) navigator.clipboard.writeText("Login: "+cp.email+"\nSenha: "+cp.senha); toast("Acesso copiado"); return; }
 
   if(act==="prompt-save"){ if(window.__promptSave){ var ipt=document.getElementById("promptInput"); window.__promptSave(ipt?ipt.value:""); } return; }
-  if(act==="modal-close"){ if(!ev.target.getAttribute("data-stop")) closeModal(); return; }
+  if(act==="modal-close"){ if(el.classList && el.classList.contains("overlay") && ev.target!==el) return; closeModal(); return; }
   if(act==="modal-yes"){ if(window.__modalYes) window.__modalYes(); return; }
 });
 
