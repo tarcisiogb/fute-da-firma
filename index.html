@@ -268,7 +268,7 @@ var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebr
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
 var MESES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
 var WEEKDAYS = ["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];
-var PREMIOS = [["craque","Craque da rodada","🏆"],["muralha","Muralha","🧤"],["garcom","Garçom","🎩"],["golbonito","Gol mais bonito","⚽✨"],["acougueiro","Açougueiro","🔪"],["bolamurcha","Bola murcha","🎈"],["fominha","Fominha","🍽️"]];
+var PREMIOS = [["craque","Craque da rodada","🏆"],["artilheiro","Artilheiro","🥇"],["garcom","Garçom","🎩"],["golbonito","Gol mais bonito","⚽✨"],["muralha","Muralha","🧤"],["acougueiro","Açougueiro","🔪"],["bolamurcha","Bola murcha","🎈"],["fominha","Fominha","🍽️"]];
 function premioLabel(k){ for(var i=0;i<PREMIOS.length;i++) if(PREMIOS[i][0]===k) return PREMIOS[i][1]; return k; }
 function premioEmoji(k){ for(var i=0;i<PREMIOS.length;i++) if(PREMIOS[i][0]===k) return PREMIOS[i][2]; return "🏅"; }
 
@@ -394,12 +394,14 @@ function notaInfo(p){ var h=notasHistorico(p.id); return {value:notaVal(p), agg:
 /* Prêmios */
 function getVoto(k,vt,pr){ return demoPremios[k+"|"+vt+"|"+pr]||null; }
 function setVoto(k,vt,pr,alvo){ var key=k+"|"+vt+"|"+pr; if(alvo) demoPremios[key]=alvo; else delete demoPremios[key]; if(FB){ var vo={}; vo[pr]= alvo?alvo:fbFieldDel(); db.collection("jogos").doc(k).collection("premios").doc(vt).set({votante:vt,votos:vo},{merge:true}).catch(fbCatch()); } }
-function premioAuto(pr){ return pr==="craque"?"gols":(pr==="garcom"?"assist":null); }
+function premioAuto(pr){ return (pr==="craque"||pr==="artilheiro"||pr==="garcom")?true:null; }
 function maxKeys(map){ var max=0,x; for(x in map) if(map[x]>max) max=map[x]; if(!max) return []; var w=[]; for(x in map) if(map[x]===max) w.push(x); return w; }
 function premioResultado(k,pr){
-  if(pr==="craque"){ return maxKeys((demoJogos[k]&&demoJogos[k].gols)||{}); }
-  if(pr==="garcom"){ return maxKeys((demoJogos[k]&&demoJogos[k].assist)||{}); }
-  var counts={},kk; for(kk in demoPremios){ var p=kk.split("|"); if(p[0]===k && p[2]===pr){ var a=demoPremios[kk]; counts[a]=(counts[a]||0)+1; } }
+  var j=demoJogos[k]||{};
+  if(pr==="artilheiro"){ return maxKeys(j.gols||{}); }
+  if(pr==="garcom"){ return maxKeys(j.assist||{}); }
+  if(pr==="craque"){ var g=j.gols||{}, a=j.assist||{}, m={},x; for(x in g) m[x]=(m[x]||0)+g[x]; for(x in a) m[x]=(m[x]||0)+a[x]; return maxKeys(m); }
+  var counts={},kk; for(kk in demoPremios){ var p=kk.split("|"); if(p[0]===k && p[2]===pr){ var al=demoPremios[kk]; counts[al]=(counts[al]||0)+1; } }
   return maxKeys(counts);
 }
 function titulosDe(id){ var t={},jr=jogosRealizados(),i,pr; for(i=0;i<jr.length;i++){ for(pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0]; if(!premioAuto(pk) && !jogoFechado(jr[i])) continue; var w=premioResultado(jr[i],pk); if(w.indexOf(id)>=0) t[pk]=(t[pk]||0)+1; } } return t; }
@@ -906,22 +908,14 @@ function renderEstatisticas(){
   var totalPres=0,totalGols=0,k; for(k in demoJogos){ var pr=demoJogos[k].presenca; for(var id in pr){ if(pr[id]===true) totalPres++; } var g=demoJogos[k].gols||{}; for(var gg in g) totalGols+=g[gg]; }
   var h=['<div class="panel pitch"><div class="eyebrow">Números da firma</div>'];
   h.push('<div class="tsummary" style="margin-top:8px;margin-bottom:0"><div class="tsum" style="background:rgba(255,255,255,.1)"><div class="k" style="color:#8fd3a8">Jogos</div><div class="v" style="color:#fff">'+jr.length+'</div></div><div class="tsum" style="background:rgba(255,255,255,.1)"><div class="k" style="color:#8fd3a8">Presenças</div><div class="v" style="color:#fff">'+totalPres+'</div></div><div class="tsum" style="background:rgba(255,255,255,.1)"><div class="k" style="color:#8fd3a8">Gols</div><div class="v" style="color:#fff">'+totalGols+'</div></div></div></div>');
-  h.push(renderGrupos());
   h.push('<div class="panel"><div class="eyebrow">Artilharia</div><h2 class="ph">Goleadores</h2>');
   if(art.length===0) h.push('<div class="emptymsg">Ainda sem gols marcados. Some gols na aba Jogos.</div>');
-  for(var a=0;a<art.length&&a<10;a++){ h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(a+1)+'</div><div class="pinfo"><div class="pname">'+esc(art[a].nome)+(art[a].avulso?' <span class="badge pos2">avulso</span>':'')+'</div></div><div style="font-family:Archivo,sans-serif;font-weight:900;font-size:16px">'+art[a].gols+' <span style="font-size:12px;font-weight:600;color:var(--ink-soft)">gols</span></div></div>'); }
+  for(var a=0;a<art.length&&a<10;a++){ h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(a+1)+'</div><div class="pinfo"><div class="pname">'+esc(art[a].nome)+'</div></div><div style="font-family:Archivo,sans-serif;font-weight:900;font-size:16px">'+art[a].gols+' <span style="font-size:12px;font-weight:600;color:var(--ink-soft)">gols</span></div></div>'); }
   h.push('</div>');
   var ast=assistencias();
   h.push('<div class="panel"><div class="eyebrow">Assistências</div><h2 class="ph">Garçons</h2>');
   if(ast.length===0) h.push('<div class="emptymsg">Ainda sem assistências marcadas. Some assistências na aba Jogos.</div>');
-  for(var as=0;as<ast.length&&as<10;as++){ h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(as+1)+'</div><div class="pinfo"><div class="pname">'+esc(ast[as].nome)+(ast[as].avulso?' <span class="badge pos2">avulso</span>':'')+'</div></div><div style="font-family:Archivo,sans-serif;font-weight:900;font-size:16px">'+ast[as].ast+' <span style="font-size:12px;font-weight:600;color:var(--ink-soft)">assist.</span></div></div>'); }
-  h.push('</div>');
-  h.push('<div class="panel"><div class="eyebrow">Presença</div><h2 class="ph">Frequência</h2>');
-  for(var f=0;f<freq.length&&f<12;f++){ h.push('<div class="prow"><div class="pinfo"><div class="pname">'+esc(freq[f].nome)+(freq[f].avulso?' <span class="badge pos2">avulso</span>':'')+'</div></div><div class="muted"><b style="color:var(--ink);font-size:15px">'+freq[f].jogos+'</b> jogo'+(freq[f].jogos===1?'':'s')+'</div></div>'); }
-  h.push('</div>');
-  h.push('<div class="panel"><div class="eyebrow">Temáticos</div><h2 class="ph">Participação</h2>');
-  h.push('<div class="subhead" style="margin-top:6px">Por supt</div>'+barList(psupt));
-  h.push('<div class="subhead" style="margin-top:14px">Por área</div>'+barList(parea));
+  for(var as=0;as<ast.length&&as<10;as++){ h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(as+1)+'</div><div class="pinfo"><div class="pname">'+esc(ast[as].nome)+'</div></div><div style="font-family:Archivo,sans-serif;font-weight:900;font-size:16px">'+ast[as].ast+' <span style="font-size:12px;font-weight:600;color:var(--ink-soft)">assist.</span></div></div>'); }
   h.push('</div>');
   h.push('<div class="panel"><div class="eyebrow">Honrarias</div><h2 class="ph">Quadro de honra</h2>');
   var qh=quadroHonra(), teveAlgum=false;
@@ -932,6 +926,14 @@ function renderEstatisticas(){
     for(var a2=0;a2<arr.length&&a2<3;a2++){ h.push('<div class="prow" style="padding:7px 4px"><div class="pinfo"><div class="pname">'+esc(nomeQualquer(arr[a2].id))+'</div></div><div class="muted"><b style="color:var(--ink)">'+arr[a2].n+'</b>×</div></div>'); }
   }
   h.push('</div>');
+  h.push('<div class="panel"><div class="eyebrow">Temáticos</div><h2 class="ph">Participação</h2>');
+  h.push('<div class="subhead" style="margin-top:6px">Por supt</div>'+barList(psupt));
+  h.push('<div class="subhead" style="margin-top:14px">Por área</div>'+barList(parea));
+  h.push('</div>');
+  h.push('<div class="panel"><div class="eyebrow">Presença</div><h2 class="ph">Frequência</h2>');
+  for(var f=0;f<freq.length&&f<12;f++){ h.push('<div class="prow"><div class="pinfo"><div class="pname">'+esc(freq[f].nome)+(freq[f].avulso?' <span class="badge pos2">avulso</span>':'')+'</div></div><div class="muted"><b style="color:var(--ink);font-size:15px">'+freq[f].jogos+'</b> jogo'+(freq[f].jogos===1?'':'s')+'</div></div>'); }
+  h.push('</div>');
+  h.push(renderGrupos());
   h.push('<div class="panel"><div class="eyebrow">Histórico</div><h2 class="ph">Últimos jogos</h2>');
   if(jr.length===0) h.push('<div class="emptymsg">Nenhum jogo registrado ainda.</div>');
   var rev=jr.slice().reverse();
@@ -984,7 +986,7 @@ function renderAvaliar(){
   h.push('</div>');
   // Prêmios
   h.push('<div class="panel"><div class="subhead">Prêmios da rodada</div>');
-  h.push('<div class="muted" style="margin:6px 0 10px">🏆 <b>Craque</b> (mais gols) e 🎩 <b>Garçom</b> (mais assistências) são automáticos, pela contagem do jogo. Os demais você vota abaixo (empate divide o título).</div>');
+  h.push('<div class="muted" style="margin:6px 0 10px">🏆 <b>Craque</b> (mais gols + assistências), 🥇 <b>Artilheiro</b> (mais gols) e 🎩 <b>Garçom</b> (mais assistências) são automáticos, pela contagem do jogo. Os demais você vota abaixo (empate divide o título).</div>');
   for(var pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0]; if(premioAuto(pk)) continue; var voto=getVoto(k,u.id,pk);
     h.push('<div style="margin-top:14px"><div style="font-weight:700;font-size:14px">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div><div class="poschips" style="margin-top:8px">');
     for(var c=0;c<cands.length;c++){ var cand=cands[c]; var on=voto===cand.id?" on":""; h.push('<div class="poschip'+on+'" data-action="premio-vote" data-k="'+esc(pk)+'" data-alvo="'+cand.id+'">'+esc(cand.apelido||cand.nome)+(cand.isAvulso?' ·avulso':'')+'</div>'); }
