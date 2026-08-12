@@ -414,7 +414,9 @@ function setComentario(k,autor,alvo,txt){ var key=k+"|"+autor+"|"+alvo; txt=(txt
 function comentTime(k,autor,alvo){ return demoComentTime[k+"|"+autor+"|"+alvo]||0; }
 function novosComentarios(uid){ var u=dbGet(uid); if(!u) return []; var vistos=u.comentVistosEm||0, cms=comentariosDe(uid), r=[]; for(var i=0;i<cms.length;i++){ if(comentTime(cms[i].k,cms[i].autor,uid)>vistos) r.push(cms[i]); } return r; }
 function marcarComentVistos(uid){ var u=dbGet(uid); if(!u) return; dbUpdate(uid,{comentVistosEm:Date.now()}); }
-function comentariosDe(alvo){ var r=[],kk; for(kk in demoComentarios){ var p=kk.split("|"); if(p[2]===alvo) r.push({k:p[0],autor:p[1],alvo:alvo,texto:demoComentarios[kk]}); } r.sort(function(a,b){ return a.k<b.k?1:(a.k>b.k?-1:0); }); return r; }
+function comentDataMs(c){ if(c.k==="perfil") return comentTime("perfil",c.autor,c.alvo)||0; var d=parseYMD(c.k); return d?d.getTime():0; }
+function comentLabel(c){ if(c.k==="perfil"){ var t=comentTime("perfil",c.autor,c.alvo); if(t){ var d=new Date(t); return "no perfil · "+pad2(d.getDate())+"/"+pad2(d.getMonth()+1); } return "no perfil"; } return jogoLabel(c.k); }
+function comentariosDe(alvo){ var r=[],kk; for(kk in demoComentarios){ var p=kk.split("|"); if(p[2]===alvo) r.push({k:p[0],autor:p[1],alvo:alvo,texto:demoComentarios[kk]}); } r.sort(function(a,b){ return comentDataMs(b)-comentDataMs(a); }); return r; }
 
 /* Sorteio de times */
 function poolFor(k){
@@ -963,7 +965,7 @@ function renderEstatisticas(){
 function renderRanking(){
   if(!S.rankModo) S.rankModo="u3";
   var all=dbAllPlayers(), jog=[]; for(var i=0;i<all.length;i++){ if(all[i].status==="aprovado") jog.push(all[i]); }
-  var ranked=jog.slice().sort(function(a,b){ return notaRanking(b,S.rankModo).value-notaRanking(a,S.rankModo).value; });
+  var ranked=jog.slice().sort(function(a,b){ var na=notaRanking(a,S.rankModo), nb=notaRanking(b,S.rankModo), ra=(na.base==="jogos"), rb=(nb.base==="jogos"); if(ra&&rb) return nb.value-na.value; if(ra!==rb) return ra?-1:1; return (a.apelido||a.nome||"").localeCompare(b.apelido||b.nome||""); });
   var h=['<div class="panel"><div class="eyebrow">Nota da firma</div><h2 class="ph">Ranking</h2>'];
   h.push('<div class="seg" style="margin-top:12px"><button data-action="rank-modo" data-m="u3" class="'+(S.rankModo==="u3"?"on":"")+'">Últimas 3</button><button data-action="rank-modo" data-m="geral" class="'+(S.rankModo==="geral"?"on":"")+'">Geral</button></div>');
   h.push('<div class="muted" style="margin-bottom:8px">'+(S.rankModo==="u3"?"Média das 3 notas semanais mais recentes de cada jogador.":"Média das notas semanais + a nota geral (base). Quem ainda não tem nota aparece com a autoavaliação.")+'</div>');
@@ -1203,9 +1205,11 @@ function playerModal(id){
   var cms=comentariosDe(p.id), meU=me(), amAdmV=amAdm();
   var ehMeu=(meU && p.id===meU.id), vistosAntes=(ehMeu?(p.comentVistosEm||0):Infinity);
   h.push('<div class="mural"><div class="subhead" style="text-align:left;margin-bottom:8px">Mural</div>');
+  var euMens=(meU && meU.mensalista && meU.status==="aprovado");
+  if(euMens && p.id!==meU.id){ var jaPerfil=getComentario("perfil",meU.id,p.id); h.push('<button class="btn ghost small" data-action="cmt-open" data-k="perfil" data-alvo="'+p.id+'" style="margin-bottom:10px">💬 '+(jaPerfil?"Editar meu comentário":"Deixar um comentário")+'</button>'); }
   if(cms.length===0) h.push('<div class="muted" style="font-size:12.5px;text-align:left">Ainda sem comentários.</div>');
   for(var ci=0;ci<cms.length;ci++){ var cm=cms[ci]; var novo=(comentTime(cm.k,cm.autor,p.id)>vistosAntes);
-    h.push('<div class="cmt"'+(novo?' style="background:#fff8e6;border-color:#f0d48a"':'')+'><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(jogoLabel(cm.k))+'</span>'+(novo?' <span class="badge pos2" style="background:#fdecea;color:#c0392b">novo</span>':'')+'</div>');
+    h.push('<div class="cmt"'+(novo?' style="background:#fff8e6;border-color:#f0d48a"':'')+'><div class="cmthead"><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">· '+esc(comentLabel(cm))+'</span>'+(novo?' <span class="badge pos2" style="background:#fdecea;color:#c0392b">novo</span>':'')+'</div>');
     h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
     if(cm.autor===meU.id || amAdmV){ h.push('<div class="cmtacts">'+(cm.autor===meU.id?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+p.id+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+p.id+'">apagar</span></div>'); }
     h.push('</div>');
@@ -1216,7 +1220,8 @@ function playerModal(id){
 }
 function shareModal(txt){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Compartilhar times</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
 function comentarioModal(k,alvo){ var u=me(), cur=getComentario(k,u.id,alvo), alv=dbGet(alvo);
-  var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Comentário sobre '+esc(alv?(alv.apelido||alv.nome):"")+'</h3><p>'+esc(jogoLabel(k))+' · aparece com seu nome no perfil dele.</p>'];
+  var sub=(k==="perfil")?"No perfil · aparece com seu nome, a qualquer momento.":(esc(jogoLabel(k))+" · aparece com seu nome no perfil dele.");
+  var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Comentário sobre '+esc(alv?(alv.apelido||alv.nome):"")+'</h3><p>'+sub+'</p>'];
   h.push('<textarea id="cmtTxt" class="sharebox" style="height:120px;font-family:inherit" placeholder="Escreva algo bacana...">'+esc(cur)+'</textarea>');
   h.push('<div class="row" style="margin-top:14px;justify-content:space-between"><div>'+(cur?'<button class="btn ghost small" data-action="cmt-del" data-k="'+k+'" data-alvo="'+alvo+'">Apagar</button>':'')+'</div><div style="display:flex;gap:8px"><button class="btn ghost" data-action="modal-close">Cancelar</button><button class="btn" data-action="cmt-save" data-k="'+k+'" data-alvo="'+alvo+'">Salvar</button></div></div>');
   h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join(""); }
