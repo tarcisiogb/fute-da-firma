@@ -459,6 +459,11 @@ function drawBalanced(pool,n,size){
   // Fase A: goleiros — mensalistas primeiro (prefere times que jogam); avulso só cobre time que ficou sem goleiro
   function assignGk(arr,leftArr){ for(var g=0;g<arr.length;g++){ var cands=[]; for(var t=0;t<actualN;t++){ if(!teams[t].gk && roomTot(t)) cands.push(t); } if(!cands.length){ leftArr.push(arr[g]); continue; } cands.sort(function(a,b){ var la=(a===last)?1:0, lb=(b===last)?1:0; return (la-lb)||(teams[a].soma-teams[b].soma); }); tPlace(teams[cands[0]], arr[g]); } }
   assignGk(mGk, mField); assignGk(aGk, aField);
+  // Separar os maiores artilheiros da temporada em times diferentes (1 por time, do maior pro menor)
+  var golsTemp=golsTemporadaMap();
+  var artis=mField.filter(function(p){ return (golsTemp[p.id]||0)>0; }).sort(function(a,b){ return (golsTemp[b.id]||0)-(golsTemp[a.id]||0); });
+  var nTop=Math.min(actualN, artis.length);
+  for(var ai=0; ai<nTop; ai++){ var pA=artis[ai], ix=mField.indexOf(pA); if(ix<0) continue; if(teams[ai].players.length>=counts[ai]) continue; mField.splice(ix,1); tPlace(teams[ai], pA); }
   // reserva as vagas de avulso do último time pra trás; o resto é dos mensalistas
   var rem=[]; for(var t3=0;t3<actualN;t3++) rem.push(counts[t3]-teams[t3].players.length);
   var aAlloc=[]; for(var t3b=0;t3b<actualN;t3b++) aAlloc.push(0);
@@ -505,6 +510,7 @@ function sorteioTexto(sr){ var cfg=dbConfig(), L=["⚽ Fute da firma — "+jogoL
 function jogosRealizados(){ var arr=[],k; for(k in demoJogos){ var j=demoJogos[k], anyP=false,pk; for(pk in j.presenca){ if(j.presenca[pk]===true){anyP=true;break;} } if(j.encerrado||anyP) arr.push(k); } arr.sort(); return arr; }
 function statPresenca(uid){ var c=0,k; for(k in demoJogos){ if(demoJogos[k].presenca[uid]===true) c++; } return c; }
 function nomeDe(k,id){ if(id.indexOf("u_")===0 || (dbGet(id))){ var p=dbGet(id); if(p) return nomeExibTxt(p); } var av=demoJogos[k].avulsos; for(var i=0;i<av.length;i++){ if(av[i].id===id) return av[i].nome; } return id; }
+function golsTemporadaMap(){ var m={},k,id; for(k in demoJogos){ var g=demoJogos[k].gols||{}; for(id in g){ m[id]=(m[id]||0)+g[id]; } } return m; }
 function artilharia(){ var map={},k; for(k in demoJogos){ var g=demoJogos[k].gols||{}; for(var id in g){ var isU=id.indexOf("u_")===0, key=isU?id:("av:"+nomeDe(k,id)); if(!map[key]) map[key]={nome:nomeDe(k,id),gols:0,avulso:!isU}; map[key].gols+=g[id]; } } var arr=[]; for(var kk in map) arr.push(map[kk]); arr.sort(function(a,b){return b.gols-a.gols;}); return arr; }
 function assistencias(){ var map={},k; for(k in demoJogos){ var g=demoJogos[k].assist||{}; for(var id in g){ var isU=id.indexOf("u_")===0, key=isU?id:("av:"+nomeDe(k,id)); if(!map[key]) map[key]={nome:nomeDe(k,id),ast:0,avulso:!isU}; map[key].ast+=g[id]; } } var arr=[]; for(var kk in map) arr.push(map[kk]); arr.sort(function(a,b){return b.ast-a.ast;}); return arr; }
 function frequencia(){ var arr=[],all=dbAllPlayers(); for(var i=0;i<all.length;i++){ if(all[i].status!=="aprovado")continue; var c=statPresenca(all[i].id); if(c>0||all[i].mensalista) arr.push({nome:nomeExibTxt(all[i]),jogos:c,avulso:false}); } var av={},jr=jogosRealizados(); for(var r=0;r<jr.length;r++){ var a=demoJogos[jr[r]].avulsos; for(var j=0;j<a.length;j++){ av[a[j].nome]=(av[a[j].nome]||0)+1; } } for(var nm in av) arr.push({nome:nm,jogos:av[nm],avulso:true}); arr.sort(function(a,b){return b.jogos-a.jogos;}); return arr; }
@@ -939,6 +945,7 @@ function renderEstatisticas(){
   for(var as=0;as<ast.length&&as<10;as++){ h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(as+1)+'</div><div class="pinfo"><div class="pname">'+esc(ast[as].nome)+'</div></div><div style="font-family:Archivo,sans-serif;font-weight:900;font-size:16px">'+ast[as].ast+' <span style="font-size:12px;font-weight:600;color:var(--ink-soft)">assist.</span></div></div>'); }
   h.push('</div>');
   h.push('<div class="panel"><div class="eyebrow">Honrarias</div><h2 class="ph">Quadro de honra</h2>');
+  var _kh=ultimoJogoHonra(); if(_kh) h.push('<button class="btn ghost small" data-action="celeb-open" data-k="'+esc(_kh)+'" style="margin:2px 0 12px">🏆 Ver comemoração da última rodada</button>');
   var qh=quadroHonra(), teveAlgum=false;
   for(var pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0], mp=qh[pk], arr=[],idk; for(idk in mp) arr.push({id:idk,n:mp[idk]}); arr.sort(function(a,b){return b.n-a.n;});
     h.push('<div class="subhead" style="margin:14px 0 6px">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div>');
@@ -1022,7 +1029,7 @@ function renderSorteioResult(sr){
   for(var i=0;i<sr.times.length;i++){ var tm=sr.times[i], avg=tm.players.length?(tm.soma/tm.players.length):0, clr=TEAMCLR[i%TEAMCLR.length];
     h.push('<div class="teamcard" style="background:'+clr.bg+';border:1px solid '+clr.bd+'55"><div class="teamhead"><div class="teamname" style="color:'+clr.tx+'">'+esc(tm.label)+'</div><div class="teammeta">'+tm.players.length+' jog. · média '+avg.toFixed(1).replace(".",",")+(tm.gk?'':' · <span style="color:var(--amber)">revezam o gol</span>')+(tm.incompleto?' · <span style="color:var(--amber)">incompleto</span>':'')+'</div></div>');
     for(var j=0;j<tm.players.length;j++){ var pl=tm.players[j];
-      h.push('<div class="teamrow"><span class="badge pos" style="min-width:56px;justify-content:center">'+esc(posLabel(pl.pos))+'</span><span class="teampl">'+esc(pl.nome)+(pl.isAvulso?' <span class="badge pos2">avulso</span>':'')+(pl.absent?' <span class="badge pos2" style="background:#fff3e0;color:#a9790b">a caminho</span>':'')+'</span><span class="teamnota">'+starsDisplay(pl.nota,false)+'</span></div>');
+      h.push('<div class="teamrow"><span class="badge pos" style="min-width:56px;justify-content:center">'+esc(posLabel(pl.pos))+'</span><span class="teampl">'+esc(pl.nome)+(pl.isAvulso?' <span class="badge pos2">avulso</span>':'')+(pl.absent?' <span class="badge pos2" style="background:#fff3e0;color:#a9790b">a caminho</span>':'')+'</span><span class="teamnota">'+starsDisplay(pl.nota,false)+' <b style="font-family:Archivo,sans-serif;font-size:13px;color:var(--ink)">'+(pl.nota||0).toFixed(1).replace(".",",")+'</b></span></div>');
     }
     h.push('</div>');
   }
@@ -1123,7 +1130,7 @@ function renderApp(){
   if(DEMO && S.appTab!=="acessos") h.push('<div class="demo-banner">Modo demonstração — as alterações valem só nesta sessão.</div>');
   h.push('</div>'); return h.join("");
 }
-function render(){ document.getElementById("app").innerHTML=(S.view==="auth")?renderAuth():renderApp(); setFavicon(); if(S.view==="app"){ var nav=document.querySelector("nav.tabs"); if(nav){ var b=nav.querySelector("button.on"); if(b) nav.scrollLeft=Math.max(0, b.offsetLeft-(nav.clientWidth-b.clientWidth)/2); } } }
+function render(){ document.getElementById("app").innerHTML=(S.view==="auth")?renderAuth():renderApp(); setFavicon(); if(S.view==="app"){ var nav=document.querySelector("nav.tabs"); if(nav){ var b=nav.querySelector("button.on"); if(b) nav.scrollLeft=Math.max(0, b.offsetLeft-(nav.clientWidth-b.clientWidth)/2); } maybeCelebracao(); } }
 
 /* =====================================================================
    AÇÕES
@@ -1218,7 +1225,43 @@ function playerModal(id){
   h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join("");
   if(ehMeu && novosComentarios(p.id).length) marcarComentVistos(p.id);
 }
-function shareModal(txt){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Compartilhar times</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
+var CELEBSVG='<svg width="46" height="46" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="ctg" x1="32" y1="6" x2="32" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#f8e6ac"/><stop offset="1" stop-color="#d9971f"/></linearGradient></defs><path d="M16 14c-8 0-12 5-9.5 11.5C8.7 31 14 32.5 19 31.5" stroke="#e6a935" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M48 14c8 0 12 5 9.5 11.5C55.3 31 50 32.5 45 31.5" stroke="#e6a935" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="14" y="7" width="36" height="5.5" rx="2.7" fill="#f8e6ac"/><path d="M17 12h30v8c0 10-6.7 17-15 17S17 30 17 20v-8z" fill="url(#ctg)"/><path d="M28 37h8v6h-8z" fill="url(#ctg)"/><rect x="21" y="43" width="22" height="5" rx="2.5" fill="url(#ctg)"/><rect x="17" y="48" width="30" height="6.5" rx="3.2" fill="#e6a935"/><path d="M23 17c1 5 3.5 8 7 9" stroke="#fff5d8" stroke-opacity=".7" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>';
+var CELEBCSS='<style>\
+.celeb-modal{padding:0;overflow:hidden;width:min(440px,94vw);max-height:92vh;display:flex;flex-direction:column}\
+.celeb-banner{background:linear-gradient(160deg,#1c6b3d,#14532d);color:#eaf3ec;padding:22px 22px 24px;position:relative;overflow:hidden;text-align:center;flex:0 0 auto}\
+.celeb-cf{position:absolute;width:8px;height:13px;border-radius:2px;opacity:.9;z-index:1}\
+.celeb-rays{position:absolute;top:2px;left:50%;transform:translateX(-50%);width:210px;height:180px;z-index:0;background:radial-gradient(circle at 50% 42%,rgba(230,169,53,.36),rgba(230,169,53,0) 62%)}\
+.celeb-crest{position:relative;z-index:2;width:82px;height:82px;margin:0 auto 12px;border-radius:50%;background:radial-gradient(circle at 50% 32%,#237e4a,#0e3d23);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(230,169,53,.95),0 10px 26px rgba(0,0,0,.38),0 0 42px rgba(230,169,53,.4)}\
+.celeb-eyebrow{position:relative;z-index:2;font-family:Archivo,sans-serif;font-weight:800;letter-spacing:.12em;font-size:11px;color:#cbe7d5;text-transform:uppercase}\
+.celeb-title{position:relative;z-index:2;font-family:Archivo,sans-serif;font-weight:900;font-size:26px;letter-spacing:-.02em;margin-top:7px;text-transform:capitalize}\
+.celeb-sub{position:relative;z-index:2;margin-top:5px;font-size:12.5px;color:#a9cbb6}\
+.celeb-body{padding:16px 16px 18px;overflow-y:auto}\
+.celeb-st{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:.1em;font-size:11px;color:var(--ink-soft);text-transform:uppercase;margin:6px 4px 8px}\
+.celeb-row{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px}\
+.celeb-av{width:56px;height:56px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:var(--grass-soft);color:var(--grass-deep);display:flex;align-items:center;justify-content:center;font-family:Archivo,sans-serif;font-weight:900;font-size:22px;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}\
+.celeb-av img{width:100%;height:100%;object-fit:cover}\
+.celeb-t{font-family:Archivo,sans-serif;font-weight:800;font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em}\
+.celeb-w{font-family:Archivo,sans-serif;font-weight:800;font-size:15.5px;color:var(--ink);margin-top:2px;line-height:1.1}\
+.celeb-stat{font-family:Inter,sans-serif;font-weight:600;font-size:12px;color:var(--ink-soft)}\
+.celeb-acts{display:flex;gap:10px;margin-top:12px}\
+</style>';
+function celebStat(k,pk,id){ var j=demoJogos[k]||{}, g=(j.gols||{})[id]||0, a=(j.assist||{})[id]||0; if(pk==="craque") return g+" gol"+(g===1?"":"s")+" + "+a+" assist."; if(pk==="artilheiro") return g+" gol"+(g===1?"":"s"); if(pk==="garcom") return a+" assist."; return ""; }
+function avatarCeleb(id){ var p=dbGet(id); return '<div class="celeb-av">'+(p?avatarInner(p):esc(initials(nomeQualquer(id))))+'</div>'; }
+function ultimoJogoHonra(){ var arr=jogosRealizados().filter(function(k){ return jogoFechado(k); }); if(!arr.length) return null; arr.sort(function(a,b){ var da=parseYMD(a),db=parseYMD(b); return (db?db.getTime():0)-(da?da.getTime():0); }); var k=arr[0], j=demoJogos[k]||{}; var tem=Object.keys(j.gols||{}).length>0||Object.keys(j.assist||{}).length>0,kk; if(!tem){ for(kk in demoPremios){ if(kk.indexOf(k+"|")===0){ tem=true; break; } } } return tem?k:null; }
+function honraTexto(k){ var L=["🏆 Quadro de honra — "+jogoLabel(k),""],i; for(i=0;i<PREMIOS.length;i++){ var pk=PREMIOS[i][0], w=premioResultado(k,pk); if(!w.length) continue; var nomes=w.map(function(id){return nomeQualquer(id);}).join(", "); var st=(w.length===1?celebStat(k,pk,w[0]):""); L.push(PREMIOS[i][2]+" "+PREMIOS[i][1]+": "+nomes+(st?" ("+st+")":"")); } return L.join("\n"); }
+function celebRows(k,keys){ var h="",i,j; for(i=0;i<keys.length;i++){ var pk=keys[i], w=premioResultado(k,pk); for(j=0;j<w.length;j++){ var id=w[j], st=(w.length===1?celebStat(k,pk,id):""); h+='<div class="celeb-row">'+avatarCeleb(id)+'<div><div class="celeb-t">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div><div class="celeb-w">'+esc(nomeQualquer(id))+(st?' <span class="celeb-stat">· '+esc(st)+'</span>':'')+'</div></div></div>'; } } return h||'<div class="muted" style="font-size:12.5px;margin-bottom:6px">Sem ganhadores nesta categoria.</div>'; }
+function celebracaoModal(k){ var cf="",cols=["#e6a935","#eaf3ec","#7ee0a6"],pos=[[26,22],[78,40],[352,30],[404,52],[150,16],[300,14]],i; for(i=0;i<pos.length;i++) cf+='<div class="celeb-cf" style="left:'+pos[i][0]+'px;top:'+pos[i][1]+'px;background:'+cols[i%3]+';transform:rotate('+((i*47)%60-30)+'deg)"></div>';
+  var h=[CELEBCSS,'<div class="overlay" data-action="celeb-close" data-k="'+esc(k)+'"><div class="modal celeb-modal" data-stop="1">'];
+  h.push('<div class="celeb-banner">'+cf+'<div class="celeb-rays"></div><div class="celeb-crest">'+CELEBSVG+'</div><div class="celeb-eyebrow">🎉 A votação fechou · Quadro de honra</div><div class="celeb-title">'+esc(jogoLabel(k))+'</div><div class="celeb-sub">Os campeões da rodada estão decididos.</div></div>');
+  h.push('<div class="celeb-body">');
+  h.push('<div class="celeb-st">Automáticos</div>'+celebRows(k,["craque","artilheiro","garcom"]));
+  h.push('<div class="celeb-st">Votados pela galera</div>'+celebRows(k,["golbonito","muralha","acougueiro","bolamurcha","fominha"]));
+  h.push('<div class="celeb-acts"><button class="btn ghost" data-action="celeb-close" data-k="'+esc(k)+'">Fechar</button><button class="btn" data-action="celeb-share" data-k="'+esc(k)+'">Compartilhar no grupo</button></div>');
+  h.push('</div></div></div>');
+  document.getElementById("modalHost").innerHTML=h.join("");
+}
+function maybeCelebracao(){ if(S.view!=="app"||S._celebOpen) return; var mh=document.getElementById("modalHost"); if(mh&&mh.innerHTML.trim()!=="") return; var u=me(); if(!u) return; var k=ultimoJogoHonra(); if(!k||u.honraVistaJogo===k) return; S._celebOpen=true; celebracaoModal(k); }
+function shareModal(txt,titulo){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>'+esc(titulo||"Compartilhar times")+'</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
 function comentarioModal(k,alvo){ var u=me(), cur=getComentario(k,u.id,alvo), alv=dbGet(alvo);
   var sub=(k==="perfil")?"No perfil · aparece com seu nome, a qualquer momento.":(esc(jogoLabel(k))+" · aparece com seu nome no perfil dele.");
   var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Comentário sobre '+esc(alv?(alv.apelido||alv.nome):"")+'</h3><p>'+sub+'</p>'];
@@ -1259,6 +1302,9 @@ document.addEventListener("click", function(ev){
   if(act==="rem-foto"){ syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=null; if(me()) dbUpdate(me().id,{foto:null}); toast("Foto removida"); render(); return; }
   if(act==="view-player"){ playerModal(el.getAttribute("data-id")); return; }
   if(act==="ver-meus-comentarios"){ playerModal(S.sessionId); return; }
+  if(act==="celeb-close"){ var ck=el.getAttribute("data-k"); var mu=me(); if(mu&&ck&&mu.honraVistaJogo!==ck) dbUpdate(mu.id,{honraVistaJogo:ck}); S._celebOpen=false; closeModal(); return; }
+  if(act==="celeb-share"){ shareModal(honraTexto(el.getAttribute("data-k")),"Compartilhar quadro de honra"); return; }
+  if(act==="celeb-open"){ celebracaoModal(el.getAttribute("data-k")); return; }
   if(act==="save-cadastro"){ saveCadastro(); return; }
 
   if(act==="approve"){ dbUpdate(id,{status:"aprovado"}); toast("Cadastro aprovado"); render(); return; }
