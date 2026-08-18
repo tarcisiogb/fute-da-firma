@@ -362,6 +362,35 @@ function dbJogoPeek(k){ return demoJogos[k]||null; }
 function setConfirm(uid,k,v){ var j=dbJogo(k); if(v) j.confirm[uid]=v; else delete j.confirm[uid]; if(FB){ var ref=db.collection("jogos").doc(k).collection("confirmacoes").doc(uid); if(v) ref.set({resp:v}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
 function setPresenca(uid,k,v){ var j=dbJogo(k); if(v===null||v===undefined) delete j.presenca[uid]; else j.presenca[uid]=v; if(FB) jogoFieldWrite(k,"presenca",uid,(v===null||v===undefined)?null:v); }
 function addAvulsoToJogo(k,o){ var j=dbJogo(k); o.id="ja_"+Date.now()+"_"+Math.floor(Math.random()*999); j.avulsos.push(o); if(FB) jogoArrWrite(k); }
+function avulsoNomes(){ var set={},i,k; for(i=0;i<demoAvulsos.length;i++) set[demoAvulsos[i].nome]=1; for(k in demoJogos){ var av=demoJogos[k].avulsos||[]; for(i=0;i<av.length;i++) set[av[i].nome]=1; } return Object.keys(set).sort(); }
+function contaAvulsoAparicoes(nome){ var n=0,k; for(k in demoJogos){ var av=demoJogos[k].avulsos||[]; for(var i=0;i<av.length;i++) if(av[i].nome===nome) n++; } return n; }
+function migrarAvulso(nome,uid){ var moved={jogos:0,gols:0,assist:0,notas:0,votos:0,coment:0}; Object.keys(demoJogos).forEach(function(k){ var j=demoJogos[k], avIds=[]; (j.avulsos||[]).forEach(function(a){ if(a.nome===nome) avIds.push(a.id); }); if(!avIds.length) return;
+    avIds.forEach(function(avId){
+      var g=(j.gols||{})[avId]||0; if(g){ setGols(k,uid,getGols(k,uid)+g); setGols(k,avId,0); moved.gols+=g; }
+      var a=(j.assist||{})[avId]||0; if(a){ setAssist(k,uid,getAssist(k,uid)+a); setAssist(k,avId,0); moved.assist+=a; }
+      Object.keys(demoNotas).forEach(function(nk){ var p=nk.split("|"); if(p[0]===k && p[2]===avId){ if(p[1]!==uid) setNota(k,p[1],uid,demoNotas[nk]); setNota(k,p[1],avId,0); moved.notas++; } });
+      Object.keys(demoPremios).forEach(function(pk){ var pp=pk.split("|"); if(pp[0]===k && demoPremios[pk]===avId){ setVoto(k,pp[1],pp[2],uid); moved.votos++; } });
+      Object.keys(demoComentarios).forEach(function(ck){ var cc=ck.split("|"); if(cc[0]===k && cc[2]===avId){ setComentario(k,cc[1],uid,demoComentarios[ck]); setComentario(k,cc[1],avId,""); moved.coment++; } });
+    });
+    if(j.presenca[uid]!==true) setPresenca(uid,k,true);
+    j.avulsos=(j.avulsos||[]).filter(function(a){ return a.nome!==nome; }); if(FB) jogoArrWrite(k);
+    moved.jogos++;
+  });
+  for(var i=demoAvulsos.length-1;i>=0;i--){ if(demoAvulsos[i].nome===nome){ var rid=demoAvulsos[i].id; demoAvulsos.splice(i,1); if(FB && rid) db.collection("avulsos").doc(rid).delete().catch(fbCatch()); } }
+  return moved; }
+function vincularModal(fixNome,fixUid){ var aprov=dbAllPlayers().filter(function(p){return p.status==="aprovado";}), nomes=avulsoNomes();
+  var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>Vincular histórico de avulso</h3>'];
+  h.push('<p class="muted" style="margin-bottom:12px">Junta os stats de um avulso (gols, assistências, presenças, prêmios e notas) no cadastro de um mensalista, mantendo o histórico. O avulso some dos jogos e vira o mensalista.</p>');
+  h.push('<div class="field"><label for="vinc_nome">Avulso (convidado)</label><select id="vinc_nome"'+(fixNome?" disabled":"")+'>');
+  if(!nomes.length) h.push('<option value="">— nenhum avulso encontrado —</option>');
+  nomes.forEach(function(nm){ var qa=contaAvulsoAparicoes(nm); h.push('<option value="'+esc(nm)+'"'+(fixNome===nm?" selected":"")+'>'+esc(nm)+' · '+qa+' jogo'+(qa===1?'':'s')+'</option>'); });
+  h.push('</select></div>');
+  h.push('<div class="field"><label for="vinc_uid">Cadastro (mensalista)</label><select id="vinc_uid"'+(fixUid?" disabled":"")+'>');
+  if(!aprov.length) h.push('<option value="">— nenhum cadastro —</option>');
+  aprov.forEach(function(p){ h.push('<option value="'+p.id+'"'+(fixUid===p.id?" selected":"")+'>'+esc(nomeExibTxt(p))+'</option>'); });
+  h.push('</select></div>');
+  h.push('<div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Cancelar</button><button class="btn" data-action="vinc-do">Vincular histórico</button></div>');
+  h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join(""); }
 function delAvulsoFromJogo(k,id){ var j=dbJogo(k); for(var i=0;i<j.avulsos.length;i++){ if(j.avulsos[i].id===id){ j.avulsos.splice(i,1); if(FB) jogoArrWrite(k); return; } } }
 function findJogoAvulso(k,id){ var j=dbJogo(k); for(var i=0;i<j.avulsos.length;i++){ if(j.avulsos[i].id===id) return j.avulsos[i]; } return null; }
 function dbAddAvulsoLista(o){ var ex=findByName(demoAvulsos,o.nome); if(ex) return ex; if(FB){ db.collection("avulsos").add({nome:o.nome,posPrincipal:o.posPrincipal,posSecundaria:o.posSecundaria||null,nota:o.nota||3}).catch(fbCatch()); return o; } o.id="av_"+Date.now(); demoAvulsos.push(o); return o; }
@@ -812,6 +841,7 @@ function playerRow(p, mode){
          if(p.mensalista) h.push('<button class="btn mini ghost" data-action="toggle-isento" data-id="'+p.id+'">'+(p.isento?"Cobrar":"Isentar")+'</button>');
          h.push('<button class="btn mini ghost" data-action="toggle-ativo" data-id="'+p.id+'">'+(p.ativo?"Inativar":"Reativar")+'</button>');
          if(amMaster()) h.push('<button class="btn mini ghost" data-action="toggle-adm" data-id="'+p.id+'">'+(p.role==="adm"?"Remover Adm":"Tornar Adm")+'</button>'); }
+  if(mode!=="pendente") h.push('<button class="btn mini ghost" data-action="vinc-from-player" data-id="'+p.id+'">Vincular avulso</button>');
   h.push('</div></div>'); return h.join("");
 }
 function renderAdmin(){
@@ -1094,7 +1124,7 @@ function renderJogos(){
   for(var x=0;x<av.length;x++){ var b=av[x];
     h.push('<div class="prow"><div class="pav">'+esc(initials(b.nome))+'</div><div class="pinfo"><div class="pname">'+esc(b.nome)+'</div><div class="pmeta"><span class="badge pos">'+esc(posLabel(b.posPrincipal))+'</span>'+(b.posSecundaria?' <span class="badge pos2">'+esc(posLabel(b.posSecundaria))+' · 2ª</span>':'')+' '+starsDisplay(b.nota)+'</div>');
     h.push('<div class="submeta">diária '+formatBRL(b.valor)+' · '+(b.pago?'<b style="color:var(--grass-deep)">pago</b>':'em aberto')+'</div></div>');
-    h.push('<div class="pacts"><button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'" aria-label="Remover">✕</button></div></div>');
+    h.push('<div class="pacts"><button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="vinc-from-avulso" data-nome="'+esc(b.nome)+'">→ mensalista</button><button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'" aria-label="Remover">✕</button></div></div>');
   }
   if(av.length===0) h.push('<div class="emptymsg">Nenhum avulso neste jogo.</div>');
   if(demoAvulsos.length){ h.push('<div style="margin-top:12px"><div class="sub" style="margin-bottom:6px">Reaproveitar convidado:</div><div class="poschips">');
@@ -1428,7 +1458,10 @@ document.addEventListener("click", function(ev){
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
   if(act==="add-avulso"){ var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
   if(act==="av-pago"){ var aa=findJogoAvulso(S.jogoSel,id); if(aa){ aa.pago=!aa.pago; if(FB) jogoArrWrite(S.jogoSel); toast(aa.pago?"Diária recebida — entrou no caixa":"Marcado em aberto"); render(); } return; }
-  if(act==="av-del"){ confirmModal("Remover avulso","Tirar este avulso do jogo?",function(){ delAvulsoFromJogo(S.jogoSel,id); closeModal(); toast("Avulso removido"); render(); },true); return; }
+  if(act==="vinc-from-player"){ if(!amAdm()) return; vincularModal(null, el.getAttribute("data-id")); return; }
+  if(act==="vinc-from-avulso"){ if(!amAdm()) return; vincularModal(el.getAttribute("data-nome"), null); return; }
+  if(act==="vinc-do"){ if(!amAdm()) return; var nome=val("vinc_nome"), uid=val("vinc_uid"); if(!nome||!uid){ toast("Escolha o avulso e o cadastro"); return; } var alvo=dbGet(uid), qa=contaAvulsoAparicoes(nome);
+    confirmModal("Vincular histórico","Trazer todo o histórico de \""+nome+"\" ("+qa+" jogo"+(qa===1?'':'s')+") para "+(alvo?esc(nomeExibTxt(alvo)):"o cadastro")+"? O avulso some desses jogos. Não dá pra desfazer.",function(){ var m=migrarAvulso(nome,uid); closeModal(); toast("Vinculado: "+m.gols+" gols · "+m.assist+" assist · "+m.jogos+" jogo"+(m.jogos===1?'':'s')); render(); },true); return; }
 
   // Áreas & supts
   if(act==="seed-listas"){ var ar=["Cartões","Itaú Shop","Parcerias","iCarros","TAG","Outras"], su=["João Seixas","Rafa Tavolaro","Tarcísio","Thomaz","Outro"]; for(var i=0;i<ar.length;i++) dbAddArea(ar[i],"aprovado"); for(var si=0;si<su.length;si++) dbAddSupt(su[si],"aprovado"); toast("Listas criadas"); render(); return; }
