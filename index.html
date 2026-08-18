@@ -353,6 +353,9 @@ function shiftJogo(k,weeks){ var d=parseYMD(k); d.setDate(d.getDate()+weeks*7); 
 function jogoCloseTime(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,9,0,0,0); }
 function jogoFechado(k){ return new Date().getTime()>=jogoCloseTime(k).getTime(); }
 function jogoAvaliavel(k){ var now=new Date(), d=parseYMD(k), start=new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0); return now.getTime()>=start.getTime() && !jogoFechado(k); }
+function jogoVoteOpen(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate(),20,30,0,0); }
+function naJanelaVotacao(k){ var now=Date.now(); return now>=jogoVoteOpen(k).getTime() && now<jogoCloseTime(k).getTime(); }
+function jogoEmVotacao(){ var pk=proximoJogoKey(), cands=[pk, shiftJogo(pk,-1)], i; for(i=0;i<cands.length;i++){ if(naJanelaVotacao(cands[i])) return cands[i]; } return null; }
 function fmtPrazo(k){ var t=jogoCloseTime(k); return pad2(t.getDate())+"/"+pad2(t.getMonth()+1)+" às 09:00"; }
 function dbJogo(k){ if(!demoJogos[k]) demoJogos[k]={confirm:{},presenca:{},avulsos:[],gols:{},assist:{},encerrado:false}; if(!demoJogos[k].gols) demoJogos[k].gols={}; if(!demoJogos[k].assist) demoJogos[k].assist={}; return demoJogos[k]; }
 function dbJogoPeek(k){ return demoJogos[k]||null; }
@@ -1240,18 +1243,19 @@ function playerModal(id){
 var CELEBSVG='<svg width="46" height="46" viewBox="0 0 64 64" fill="none"><defs><linearGradient id="ctg" x1="32" y1="6" x2="32" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#f8e6ac"/><stop offset="1" stop-color="#d9971f"/></linearGradient></defs><path d="M16 14c-8 0-12 5-9.5 11.5C8.7 31 14 32.5 19 31.5" stroke="#e6a935" stroke-width="4" fill="none" stroke-linecap="round"/><path d="M48 14c8 0 12 5 9.5 11.5C55.3 31 50 32.5 45 31.5" stroke="#e6a935" stroke-width="4" fill="none" stroke-linecap="round"/><rect x="14" y="7" width="36" height="5.5" rx="2.7" fill="#f8e6ac"/><path d="M17 12h30v8c0 10-6.7 17-15 17S17 30 17 20v-8z" fill="url(#ctg)"/><path d="M28 37h8v6h-8z" fill="url(#ctg)"/><rect x="21" y="43" width="22" height="5" rx="2.5" fill="url(#ctg)"/><rect x="17" y="48" width="30" height="6.5" rx="3.2" fill="#e6a935"/><path d="M23 17c1 5 3.5 8 7 9" stroke="#fff5d8" stroke-opacity=".7" stroke-width="2.4" fill="none" stroke-linecap="round"/></svg>';
 var CELEBCSS='<style>\
 .celeb-modal{padding:0;overflow:hidden;width:min(440px,94vw);max-height:92vh;display:flex;flex-direction:column}\
-.celeb-banner{background:linear-gradient(160deg,#1c6b3d,#14532d);color:#eaf3ec;padding:22px 22px 24px;position:relative;overflow:hidden;text-align:center;flex:0 0 auto}\
+.celeb-banner{background:linear-gradient(160deg,#1c6b3d,#14532d);color:#eaf3ec;padding:16px 20px 18px;position:relative;overflow:hidden;text-align:center;flex:0 0 auto}\
 .celeb-cf{position:absolute;width:8px;height:13px;border-radius:2px;opacity:.9;z-index:1}\
 .celeb-rays{position:absolute;top:2px;left:50%;transform:translateX(-50%);width:210px;height:180px;z-index:0;background:radial-gradient(circle at 50% 42%,rgba(230,169,53,.36),rgba(230,169,53,0) 62%)}\
-.celeb-crest{position:relative;z-index:2;width:82px;height:82px;margin:0 auto 12px;border-radius:50%;background:radial-gradient(circle at 50% 32%,#237e4a,#0e3d23);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(230,169,53,.95),0 10px 26px rgba(0,0,0,.38),0 0 42px rgba(230,169,53,.4)}\
+.celeb-crest{position:relative;z-index:2;width:66px;height:66px;margin:0 auto 9px;border-radius:50%;background:radial-gradient(circle at 50% 32%,#237e4a,#0e3d23);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px rgba(230,169,53,.95),0 8px 20px rgba(0,0,0,.35),0 0 36px rgba(230,169,53,.4)}\
 .celeb-eyebrow{position:relative;z-index:2;font-family:Archivo,sans-serif;font-weight:800;letter-spacing:.12em;font-size:11px;color:#cbe7d5;text-transform:uppercase}\
-.celeb-title{position:relative;z-index:2;font-family:Archivo,sans-serif;font-weight:900;font-size:26px;letter-spacing:-.02em;margin-top:7px;text-transform:capitalize}\
+.celeb-title{position:relative;z-index:2;font-family:Archivo,sans-serif;font-weight:900;font-size:23px;letter-spacing:-.02em;margin-top:7px;text-transform:capitalize}\
 .celeb-sub{position:relative;z-index:2;margin-top:5px;font-size:12.5px;color:#a9cbb6}\
-.celeb-body{padding:16px 16px 18px;overflow-y:auto}\
-.celeb-st{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:.1em;font-size:11px;color:var(--ink-soft);text-transform:uppercase;margin:6px 4px 8px}\
-.celeb-row{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-bottom:8px}\
-.celeb-av{width:56px;height:56px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:var(--grass-soft);color:var(--grass-deep);display:flex;align-items:center;justify-content:center;font-family:Archivo,sans-serif;font-weight:900;font-size:22px;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}\
+.celeb-body{padding:12px 14px 14px;overflow-y:auto}\
+.celeb-st{font-family:Archivo,sans-serif;font-weight:800;letter-spacing:.1em;font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;margin:4px 4px 6px}\
+.celeb-row{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-radius:13px;padding:7px 11px;margin-bottom:6px}\
+.celeb-av{width:48px;height:48px;border-radius:50%;flex:0 0 auto;overflow:hidden;background:var(--grass-soft);color:var(--grass-deep);display:flex;align-items:center;justify-content:center;font-family:Archivo,sans-serif;font-weight:900;font-size:22px;border:2px solid #fff;box-shadow:0 0 0 1px var(--line)}\
 .celeb-av img{width:100%;height:100%;object-fit:cover}\
+.celeb-crest svg{width:38px;height:38px}\
 .celeb-t{font-family:Archivo,sans-serif;font-weight:800;font-size:11px;color:var(--amber);text-transform:uppercase;letter-spacing:.04em}\
 .celeb-w{font-family:Archivo,sans-serif;font-weight:800;font-size:15.5px;color:var(--ink);margin-top:2px;line-height:1.1}\
 .celeb-stat{font-family:Inter,sans-serif;font-weight:600;font-size:12px;color:var(--ink-soft)}\
@@ -1263,17 +1267,73 @@ function jogoTemHonra(k){ if(!jogoFechado(k)) return false; var j=demoJogos[k]||
 function ultimoJogoHonra(){ var arr=jogosRealizados().filter(function(k){ return jogoTemHonra(k); }); if(!arr.length) return null; arr.sort(function(a,b){ var da=parseYMD(a),db=parseYMD(b); return (db?db.getTime():0)-(da?da.getTime():0); }); return arr[0]; }
 function honraTexto(k){ var L=["🏆 Quadro de honra — "+jogoLabel(k),""],i; for(i=0;i<PREMIOS.length;i++){ var pk=PREMIOS[i][0], w=premioResultado(k,pk); if(!w.length) continue; var nomes=w.map(function(id){return nomeQualquer(id);}).join(", "); var st=(w.length===1?celebStat(k,pk,w[0]):""); L.push(PREMIOS[i][2]+" "+PREMIOS[i][1]+": "+nomes+(st?" ("+st+")":"")); } return L.join("\n"); }
 function celebRows(k,keys){ var h="",i,j; for(i=0;i<keys.length;i++){ var pk=keys[i], w=premioResultado(k,pk); for(j=0;j<w.length;j++){ var id=w[j], st=(w.length===1?celebStat(k,pk,id):""); h+='<div class="celeb-row">'+avatarCeleb(id)+'<div><div class="celeb-t">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div><div class="celeb-w">'+esc(nomeQualquer(id))+(st?' <span class="celeb-stat">· '+esc(st)+'</span>':'')+'</div></div></div>'; } } return h||'<div class="muted" style="font-size:12.5px;margin-bottom:6px">Sem ganhadores nesta categoria.</div>'; }
+function honraRowsData(k){ var groups=[["Automáticos",["craque","artilheiro","garcom"]],["Votados pela galera",["golbonito","muralha","acougueiro","bolamurcha","fominha"]]], out=[]; groups.forEach(function(g){ var rows=[]; g[1].forEach(function(pk){ var w=premioResultado(k,pk); w.forEach(function(id){ rows.push({pk:pk,id:id,nome:nomeQualquer(id),stat:(w.length===1?celebStat(k,pk,id):""),foto:(dbGet(id)||{}).foto||null}); }); }); if(rows.length) out.push({titulo:g[0],rows:rows}); }); return out; }
+function loadImg(src){ return new Promise(function(res){ if(!src){res(null);return;} var im=new Image(); im.crossOrigin="anonymous"; im.onload=function(){res(im);}; im.onerror=function(){res(null);}; im.src=src; }); }
+function roundRectC(x,rx,ry,rw,rh,r){ x.beginPath(); x.moveTo(rx+r,ry); x.arcTo(rx+rw,ry,rx+rw,ry+rh,r); x.arcTo(rx+rw,ry+rh,rx,ry+rh,r); x.arcTo(rx,ry+rh,rx,ry,r); x.arcTo(rx,ry,rx+rw,ry,r); x.closePath(); }
+function drawTrophyCanvas(x,cx,cy,s){ var g=x.createLinearGradient(cx,cy-s,cx,cy+s*0.7); g.addColorStop(0,"#f8e6ac"); g.addColorStop(1,"#d9971f"); var u=s/26;
+  x.strokeStyle="#e6a935"; x.lineWidth=4*u; x.lineCap="round";
+  x.beginPath(); x.moveTo(cx-13*u,cy-9*u); x.bezierCurveTo(cx-24*u,cy-7*u,cx-24*u,cy+7*u,cx-11*u,cy+7*u); x.stroke();
+  x.beginPath(); x.moveTo(cx+13*u,cy-9*u); x.bezierCurveTo(cx+24*u,cy-7*u,cx+24*u,cy+7*u,cx+11*u,cy+7*u); x.stroke();
+  x.fillStyle="#f8e6ac"; roundRectC(x,cx-16*u,cy-16*u,32*u,5*u,2.5*u); x.fill();
+  x.fillStyle=g; x.beginPath(); x.moveTo(cx-14*u,cy-11*u); x.lineTo(cx+14*u,cy-11*u); x.lineTo(cx+12*u,cy-1*u); x.quadraticCurveTo(cx+10*u,cy+9*u,cx,cy+11*u); x.quadraticCurveTo(cx-10*u,cy+9*u,cx-12*u,cy-1*u); x.closePath(); x.fill();
+  x.fillStyle=g; x.fillRect(cx-3*u,cy+11*u,6*u,7*u); roundRectC(x,cx-9*u,cy+18*u,18*u,4*u,2*u); x.fill();
+  x.fillStyle="#e6a935"; roundRectC(x,cx-13*u,cy+22*u,26*u,5*u,2.5*u); x.fill(); }
+function gerarHonraImagem(k,dbg){
+  var groups=honraRowsData(k), srcs=[]; groups.forEach(function(g){ g.rows.forEach(function(r){ srcs.push(r.foto); }); });
+  var run=function(){ Promise.all(srcs.map(loadImg)).then(function(photos){
+    var idx=0;
+    var W=1000, pad=40, rowH=118, gap=16, secH=56, cardX=pad, cardW=W-2*pad;
+    var bannerH=320, y0=bannerH+22, H=y0; groups.forEach(function(g){ H+=secH; H+=g.rows.length*(rowH+gap); }); H+=52;
+    var c=(dbg&&dbg.canvas)||document.createElement("canvas"); c.width=W; c.height=H; var x=c.getContext("2d");
+    x.fillStyle="#f4f6f2"; x.fillRect(0,0,W,H);
+    var bg=x.createLinearGradient(0,0,0,bannerH); bg.addColorStop(0,"#1c6b3d"); bg.addColorStop(1,"#14532d"); x.fillStyle=bg; x.fillRect(0,0,W,bannerH);
+    var rg=x.createRadialGradient(W/2,150,0,W/2,150,320); rg.addColorStop(0,"rgba(230,169,53,.34)"); rg.addColorStop(1,"rgba(230,169,53,0)"); x.fillStyle=rg; x.fillRect(0,0,W,bannerH);
+    var ccx=W/2, ccy=104, cr=64;
+    x.beginPath(); x.arc(ccx,ccy,cr+5,0,7); x.fillStyle="#e6a935"; x.fill();
+    var cg=x.createRadialGradient(ccx,ccy-24,8,ccx,ccy,cr); cg.addColorStop(0,"#237e4a"); cg.addColorStop(1,"#0e3d23"); x.beginPath(); x.arc(ccx,ccy,cr,0,7); x.fillStyle=cg; x.fill();
+    drawTrophyCanvas(x,ccx,ccy,44);
+    x.textAlign="center"; x.fillStyle="#cbe7d5"; x.font="800 22px Archivo,Arial,sans-serif"; x.fillText("A VOTAÇÃO FECHOU · QUADRO DE HONRA",ccx,ccy+cr+40);
+    x.fillStyle="#eaf3ec"; x.font="900 52px Archivo,Arial,sans-serif"; x.fillText(jogoLabel(k),ccx,ccy+cr+98);
+    x.fillStyle="#a9cbb6"; x.font="500 23px Inter,Arial,sans-serif"; x.fillText("Os campeões da rodada",ccx,ccy+cr+134);
+    var y=y0;
+    groups.forEach(function(g){ x.textAlign="left"; x.fillStyle="#5c6b62"; x.font="800 21px Archivo,Arial,sans-serif"; x.fillText(g.titulo.toUpperCase(),pad+6,y+34); y+=secH;
+      g.rows.forEach(function(r){ roundRectC(x,cardX,y,cardW,rowH,22); x.fillStyle="#fff"; x.fill(); x.strokeStyle="#e2e8e2"; x.lineWidth=2; x.stroke();
+        var ar=38, ax=cardX+28, ay=y+rowH/2;
+        x.save(); x.beginPath(); x.arc(ax+ar,ay,ar,0,7); x.closePath(); x.clip(); var im=photos[idx];
+        if(im){ x.drawImage(im,ax,ay-ar,ar*2,ar*2); } else { x.fillStyle="#e9f3ec"; x.fillRect(ax,ay-ar,ar*2,ar*2); x.fillStyle="#166534"; x.textAlign="center"; x.font="900 30px Archivo,Arial,sans-serif"; x.fillText(initials(r.nome),ax+ar,ay+11); }
+        x.restore(); idx++;
+        var tx=ax+ar*2+26; x.textAlign="left"; x.fillStyle="#b9852b"; x.font="800 20px Archivo,Arial,sans-serif"; x.fillText((premioLabel(r.pk)).toUpperCase(),tx,y+46);
+        x.fillStyle="#10221a"; x.font="800 32px Archivo,Arial,sans-serif"; x.fillText(r.nome,tx,y+86);
+        if(r.stat){ var nmW=x.measureText(r.nome).width; x.fillStyle="#5c6b62"; x.font="600 22px Inter,Arial,sans-serif"; x.fillText("· "+r.stat,tx+nmW+14,y+85); }
+        y+=rowH+gap; });
+    });
+    x.textAlign="center"; x.fillStyle="#9fb0a6"; x.font="800 20px Archivo,Arial,sans-serif"; x.fillText("⚽ Fute da firma",W/2,H-18);
+    if(dbg) return;
+    c.toBlob(function(blob){ if(!blob){ toast("Não consegui gerar a imagem"); return; } var file=new File([blob],"quadro-de-honra.png",{type:"image/png"}); if(navigator.canShare&&navigator.canShare({files:[file]})){ navigator.share({files:[file],title:"Quadro de honra — "+jogoLabel(k)}).catch(function(){}); } else { var url=URL.createObjectURL(blob); var a=document.createElement("a"); a.href=url; a.download="quadro-de-honra.png"; document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){URL.revokeObjectURL(url);},3000); toast("Imagem salva"); } },"image/png");
+  }); };
+  if(!dbg && document.fonts && document.fonts.ready) document.fonts.ready.then(run); else run();
+}
+function votarCallModal(k){ var cf="",cols=["#e6a935","#eaf3ec","#7ee0a6"],pos=[[26,22],[78,40],[352,30],[404,52],[150,16],[300,14]],i; for(i=0;i<pos.length;i++) cf+='<div class="celeb-cf" style="left:'+pos[i][0]+'px;top:'+pos[i][1]+'px;background:'+cols[i%3]+';transform:rotate('+((i*47)%60-30)+'deg)"></div>';
+  var fecha=jogoCloseTime(k), quando=WEEKDAYS[fecha.getDay()]+" "+pad2(fecha.getHours())+"h";
+  var h=[CELEBCSS,'<div class="overlay" data-action="vote-call-close" data-k="'+esc(k)+'"><div class="modal celeb-modal" data-stop="1">'];
+  h.push('<div class="celeb-banner">'+cf+'<div class="celeb-rays"></div><div class="celeb-crest">'+CELEBSVG+'</div><div class="celeb-eyebrow">🗳️ Votação aberta</div><div class="celeb-title">'+esc(jogoLabel(k))+'</div><div class="celeb-sub">Vote nos prêmios da rodada até '+esc(quando)+'.</div></div>');
+  h.push('<div class="celeb-body"><div class="muted" style="text-align:center;margin:8px 4px 16px;line-height:1.5">Dê as notas e escolha os craques: <b>Muralha</b>, <b>Gol mais bonito</b>, <b>Açougueiro</b> e cia. Craque, Artilheiro e Garçom saem automáticos pelos números.</div>');
+  h.push('<div class="celeb-acts"><button class="btn ghost" data-action="vote-call-close" data-k="'+esc(k)+'">Agora não</button><button class="btn" data-action="vote-call-go" data-k="'+esc(k)+'">Votar agora</button></div></div></div></div>');
+  document.getElementById("modalHost").innerHTML=h.join("");
+}
+function maybeCelebracao(){ if(S.view!=="app"||S._celebOpen) return; var mh=document.getElementById("modalHost"); if(mh&&mh.innerHTML.trim()!=="") return; var u=me(); if(!u) return;
+  var kv=jogoEmVotacao(); if(kv){ if(u.voteCallVista===kv) return; S._celebOpen=true; votarCallModal(kv); return; }
+  var k=ultimoJogoHonra(); if(!k||u.honraVistaJogo===k) return; S._celebOpen=true; celebracaoModal(k); }
 function celebracaoModal(k){ var cf="",cols=["#e6a935","#eaf3ec","#7ee0a6"],pos=[[26,22],[78,40],[352,30],[404,52],[150,16],[300,14]],i; for(i=0;i<pos.length;i++) cf+='<div class="celeb-cf" style="left:'+pos[i][0]+'px;top:'+pos[i][1]+'px;background:'+cols[i%3]+';transform:rotate('+((i*47)%60-30)+'deg)"></div>';
   var h=[CELEBCSS,'<div class="overlay" data-action="celeb-close" data-k="'+esc(k)+'"><div class="modal celeb-modal" data-stop="1">'];
   h.push('<div class="celeb-banner">'+cf+'<div class="celeb-rays"></div><div class="celeb-crest">'+CELEBSVG+'</div><div class="celeb-eyebrow">🎉 A votação fechou · Quadro de honra</div><div class="celeb-title">'+esc(jogoLabel(k))+'</div><div class="celeb-sub">Os campeões da rodada estão decididos.</div></div>');
   h.push('<div class="celeb-body">');
   h.push('<div class="celeb-st">Automáticos</div>'+celebRows(k,["craque","artilheiro","garcom"]));
   h.push('<div class="celeb-st">Votados pela galera</div>'+celebRows(k,["golbonito","muralha","acougueiro","bolamurcha","fominha"]));
-  h.push('<div class="celeb-acts"><button class="btn ghost" data-action="celeb-close" data-k="'+esc(k)+'">Fechar</button><button class="btn" data-action="celeb-share" data-k="'+esc(k)+'">Compartilhar no grupo</button></div>');
+  h.push('<div class="celeb-acts"><button class="btn ghost" data-action="celeb-close" data-k="'+esc(k)+'">Fechar</button><button class="btn" data-action="celeb-share" data-k="'+esc(k)+'">📸 Compartilhar imagem</button></div>');
   h.push('</div></div></div>');
   document.getElementById("modalHost").innerHTML=h.join("");
 }
-function maybeCelebracao(){ if(S.view!=="app"||S._celebOpen) return; var mh=document.getElementById("modalHost"); if(mh&&mh.innerHTML.trim()!=="") return; var u=me(); if(!u) return; var k=ultimoJogoHonra(); if(!k||u.honraVistaJogo===k) return; S._celebOpen=true; celebracaoModal(k); }
 function shareModal(txt,titulo){ var h=['<div class="overlay" data-action="modal-close"><div class="modal" data-stop="1"><h3>'+esc(titulo||"Compartilhar times")+'</h3><p>Copie e cole no grupo do fut.</p><textarea id="shareTxt" class="sharebox">'+esc(txt)+'</textarea><div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Fechar</button><button class="btn" data-action="copy-share">Copiar</button></div></div></div>']; document.getElementById("modalHost").innerHTML=h.join(""); }
 function comentarioModal(k,alvo){ var u=me(), cur=getComentario(k,u.id,alvo), alv=dbGet(alvo);
   var sub=(k==="perfil")?"No perfil · aparece com seu nome, a qualquer momento.":(esc(jogoLabel(k))+" · aparece com seu nome no perfil dele.");
@@ -1315,9 +1375,11 @@ document.addEventListener("click", function(ev){
   if(act==="rem-foto"){ syncEditInputs(); if(!S.edit) ensureEdit(); S.edit.foto=null; if(me()) dbUpdate(me().id,{foto:null}); toast("Foto removida"); render(); return; }
   if(act==="view-player"){ playerModal(el.getAttribute("data-id")); return; }
   if(act==="ver-meus-comentarios"){ playerModal(S.sessionId); return; }
-  if(act==="celeb-close"){ var ck=el.getAttribute("data-k"); var mu=me(); if(mu&&ck&&mu.honraVistaJogo!==ck) dbUpdate(mu.id,{honraVistaJogo:ck}); S._celebOpen=false; closeModal(); return; }
-  if(act==="celeb-share"){ shareModal(honraTexto(el.getAttribute("data-k")),"Compartilhar quadro de honra"); return; }
+  if(act==="celeb-close"){ if(el.classList&&el.classList.contains("overlay")&&ev.target!==el) return; var ck=el.getAttribute("data-k"); var mu=me(); if(mu&&ck&&mu.honraVistaJogo!==ck) dbUpdate(mu.id,{honraVistaJogo:ck}); S._celebOpen=false; closeModal(); return; }
+  if(act==="celeb-share"){ gerarHonraImagem(el.getAttribute("data-k")); return; }
   if(act==="celeb-open"){ celebracaoModal(el.getAttribute("data-k")); return; }
+  if(act==="vote-call-go"){ var vk=el.getAttribute("data-k"); var muv=me(); if(muv&&muv.voteCallVista!==vk) dbUpdate(muv.id,{voteCallVista:vk}); S._celebOpen=false; S.appTab="inicio"; S.avaliarJogo=vk; closeModal(); window.scrollTo(0,0); render(); return; }
+  if(act==="vote-call-close"){ if(el.classList&&el.classList.contains("overlay")&&ev.target!==el) return; var vk2=el.getAttribute("data-k"); var muc=me(); if(muc&&vk2&&muc.voteCallVista!==vk2) dbUpdate(muc.id,{voteCallVista:vk2}); S._celebOpen=false; closeModal(); return; }
   if(act==="save-cadastro"){ saveCadastro(); return; }
 
   if(act==="approve"){ dbUpdate(id,{status:"aprovado"}); toast("Cadastro aprovado"); render(); return; }
