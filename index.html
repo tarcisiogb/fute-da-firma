@@ -352,6 +352,10 @@ function jogoMesKey(k){ return k.slice(0,7); }
 function shiftJogo(k,weeks){ var d=parseYMD(k); d.setDate(d.getDate()+weeks*7); return ymd(d); }
 function jogoCloseTime(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,9,0,0,0); }
 function jogoFechado(k){ return new Date().getTime()>=jogoCloseTime(k).getTime(); }
+function jogoTravado(k){ var j=demoJogos[k]||{}; if(j.travado===true) return true; if(j.travado===false) return false; return jogoFechado(k); }
+function jogoSetTravado(k,val){ var j=dbJogo(k); j.travado=val; if(FB) db.collection("jogos").doc(k).set({travado:val},{merge:true}).catch(fbCatch()); }
+function edicaoBloqueada(k){ if(jogoTravado(k)){ toast("Jogo travado — o Master precisa reabrir para editar"); return true; } return false; }
+function statStatic(k,id){ return '<span class="golnum" style="margin-left:6px">⚽ '+getGols(k,id)+'</span> <span class="golnum">👟 '+getAssist(k,id)+'</span>'; }
 function jogoAvaliavel(k){ var now=new Date(), d=parseYMD(k), start=new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,0,0); return now.getTime()>=start.getTime() && !jogoFechado(k); }
 function jogoVoteOpen(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate(),20,30,0,0); }
 function naJanelaVotacao(k){ var now=Date.now(); return now>=jogoVoteOpen(k).getTime() && now<jogoCloseTime(k).getTime(); }
@@ -598,7 +602,7 @@ function subscribeAll(){ if(S._subscribed) return; S._subscribed=true;
   db.collection("mensalidades").onSnapshot(function(qs){ demoMensalidades={}; qs.forEach(function(d){ var o=d.data(); if(o.uid&&o.mes) demoMensalidades[o.uid+"|"+o.mes]={pago:o.pago,data:o.data,valor:o.valor}; }); render(); }, fbCatch());
   db.collection("despesas").onSnapshot(function(qs){ demoDespesas=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoDespesas.push(o); }); render(); }, fbCatch());
   db.collection("avulsos").onSnapshot(function(qs){ demoAvulsos=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoAvulsos.push(o); }); render(); }, fbCatch());
-  db.collection("jogos").onSnapshot(function(qs){ qs.forEach(function(d){ var o=d.data(); var j=dbJogo(d.id); j.presenca=o.presenca||{}; j.gols=o.gols||{}; j.assist=o.assist||{}; j.avulsos=o.avulsos||[]; j.encerrado=!!o.encerrado; }); render(); }, fbCatch());
+  db.collection("jogos").onSnapshot(function(qs){ qs.forEach(function(d){ var o=d.data(); var j=dbJogo(d.id); j.presenca=o.presenca||{}; j.gols=o.gols||{}; j.assist=o.assist||{}; j.avulsos=o.avulsos||[]; j.encerrado=!!o.encerrado; j.travado=(o.travado===true?true:(o.travado===false?false:undefined)); }); render(); }, fbCatch());
   db.collectionGroup("confirmacoes").onSnapshot(function(qs){ var k; for(k in demoJogos) demoJogos[k].confirm={}; qs.forEach(function(d){ var jk=d.ref.parent.parent.id; dbJogo(jk).confirm[d.id]=d.data().resp; }); render(); }, fbCatch());
   db.collectionGroup("notas").onSnapshot(function(qs){ demoNotas={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.avaliador&&o.alvo&&o.nota) demoNotas[jk+"|"+o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
   db.collectionGroup("premios").onSnapshot(function(qs){ demoPremios={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id, vt=o.votante||d.id, vs=o.votos||{}; for(var pr in vs){ if(vs[pr]) demoPremios[jk+"|"+vt+"|"+pr]=vs[pr]; } }); render(); }, fbCatch());
@@ -852,7 +856,15 @@ function renderAdmin(){
   h.push('</div><div class="panel"><div class="sechead"><div><div class="eyebrow">Elenco</div><h2 class="ph">Jogadores aprovados</h2></div><div class="count">'+elenco.length+'</div></div>');
   h.push('<div class="muted" style="margin-bottom:6px">'+(amMaster()?"Como Master, você concede Adm e ajusta cobrança e status.":"Você aprova cadastros e ajusta cobrança e status. Conceder Adm é só do Master.")+'</div>');
   for(var b=0;b<elenco.length;b++) h.push(playerRow(elenco[b],"elenco"));
-  h.push('</div>'); return h.join("");
+  h.push('</div>');
+  if(amMaster()){
+    var jrT=jogosRealizados().slice().sort().reverse();
+    h.push('<div class="panel"><div class="eyebrow">Controle do Master</div><h2 class="ph">Travar rodadas</h2><div class="muted" style="margin-bottom:8px">Rodada travada bloqueia edição de gols, assistências, presença e avulsos (inclusive pelos Adms). Ao fechar a votação (09:00) trava sozinha; reabra pra corrigir e trave de novo.</div>');
+    if(!jrT.length) h.push('<div class="emptymsg">Nenhuma rodada ainda.</div>');
+    for(var g=0;g<jrT.length&&g<10;g++){ var gk=jrT[g], tv=jogoTravado(gk); h.push('<div class="prow"><div class="pinfo"><div class="pname" style="text-transform:capitalize">'+esc(jogoLabel(gk))+'</div><div class="pmeta">'+(tv?'<span class="badge" style="background:#fdecea;color:#c0392b">🔒 Travado</span>':'<span class="badge mens">🔓 Aberto</span>')+'</div></div><div class="pacts"><button class="btn mini ghost" data-action="toggle-travar" data-k="'+esc(gk)+'">'+(tv?"Reabrir":"Travar")+'</button></div></div>'); }
+    h.push('</div>');
+  }
+  return h.join("");
 }
 
 /* Tesouraria: caixa + mensalidades + despesas */
@@ -1099,7 +1111,7 @@ function renderJogos(){
   var cfg=dbConfig(); if(!S.jogoSel) S.jogoSel=proximoJogoKey(); var k=S.jogoSel, j=dbJogo(k);
   var all=dbAllPlayers(), mens=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.mensalista&&p.status==="aprovado"&&p.ativo) mens.push(p); }
   var nsim=0,nnao=0; for(var a=0;a<mens.length;a++){ var c=j.confirm[mens[a].id]; if(c==="sim")nsim++; else if(c==="nao")nnao++; }
-  var nsem=mens.length-nsim-nnao, isProx=(k===proximoJogoKey());
+  var nsem=mens.length-nsim-nnao, isProx=(k===proximoJogoKey()), trav=jogoTravado(k);
   var h=[];
   h.push('<div class="panel"><div class="eyebrow">Configuração</div><h2 class="ph">Dia do jogo</h2>');
   h.push('<div class="grid2" style="margin-top:12px"><div class="field"><label for="jc_dia">Dia da semana</label><select id="jc_dia" class="selin">');
@@ -1109,12 +1121,13 @@ function renderJogos(){
   h.push('<button class="btn ghost small" data-action="save-jogo-cfg">Salvar</button></div>');
 
   h.push('<div class="panel"><div class="mesnav"><button class="btn mini ghost" data-action="jogo-prev" aria-label="Semana anterior">‹</button><div class="meslbl" style="text-transform:capitalize">'+esc(jogoLabel(k))+(isProx?' <span class="badge mens" style="vertical-align:middle;text-transform:none">próximo</span>':'')+'</div><button class="btn mini ghost" data-action="jogo-next" aria-label="Próxima semana">›</button></div>');
+  h.push('<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px">'+(trav?'<span class="badge" style="background:#fdecea;color:#c0392b">🔒 Travado</span>':'<span class="badge mens">🔓 Aberto p/ edição</span>')+(amMaster()?'<button class="btn mini ghost" data-action="toggle-travar" data-k="'+esc(k)+'">'+(trav?"Reabrir jogo":"Travar jogo")+'</button>':(trav?'<span class="muted" style="font-size:12px">estatísticas bloqueadas</span>':''))+'</div>');
   h.push('<div class="tsummary"><div class="tsum"><div class="k">Confirmados</div><div class="v">'+nsim+'</div></div><div class="tsum"><div class="k">Não vão</div><div class="v">'+nnao+'</div></div><div class="tsum"><div class="k">Sem resposta</div><div class="v">'+nsem+'</div></div></div>');
   h.push('<div class="subhead" style="margin-top:6px">Mensalistas — presença</div>');
   for(var m=0;m<mens.length;m++){ var q=mens[m], cc=j.confirm[q.id], pr=j.presenca[q.id];
     var chip=cc==="sim"?'<span class="badge mens">Confirmou</span>':cc==="nao"?'<span class="badge inativo">Não vai</span>':'<span class="badge semcob">Sem resposta</span>';
     h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+chip+' '+posPairBadges(q)+'</div></div>');
-    h.push('<div class="pacts"><button class="btn mini '+(pr===true?"ok":"ghost")+'" data-action="pres-on" data-id="'+q.id+'">Presente</button><button class="btn mini '+(pr===false?"danger":"ghost")+'" data-action="pres-off" data-id="'+q.id+'">Faltou</button>'+(pr===true?statStepper(k,q.id):'')+'</div></div>');
+    h.push('<div class="pacts">'+(trav?((pr===true?'<span class="badge ok">Presente</span>':pr===false?'<span class="badge danger">Faltou</span>':'<span class="muted" style="font-size:12px">—</span>')+(pr===true?statStatic(k,q.id):'')):('<button class="btn mini '+(pr===true?"ok":"ghost")+'" data-action="pres-on" data-id="'+q.id+'">Presente</button><button class="btn mini '+(pr===false?"danger":"ghost")+'" data-action="pres-off" data-id="'+q.id+'">Faltou</button>'+(pr===true?statStepper(k,q.id):'')))+'</div></div>');
   }
   if(mens.length===0) h.push('<div class="emptymsg">Nenhum mensalista ativo.</div>');
   h.push('</div>');
@@ -1124,9 +1137,10 @@ function renderJogos(){
   for(var x=0;x<av.length;x++){ var b=av[x];
     h.push('<div class="prow"><div class="pav">'+esc(initials(b.nome))+'</div><div class="pinfo"><div class="pname">'+esc(b.nome)+'</div><div class="pmeta"><span class="badge pos">'+esc(posLabel(b.posPrincipal))+'</span>'+(b.posSecundaria?' <span class="badge pos2">'+esc(posLabel(b.posSecundaria))+' · 2ª</span>':'')+' '+starsDisplay(b.nota)+'</div>');
     h.push('<div class="submeta">diária '+formatBRL(b.valor)+' · '+(b.pago?'<b style="color:var(--grass-deep)">pago</b>':'em aberto')+'</div></div>');
-    h.push('<div class="pacts"><button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="vinc-from-avulso" data-nome="'+esc(b.nome)+'">→ mensalista</button><button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'" aria-label="Remover">✕</button></div></div>');
+    h.push('<div class="pacts">'+(trav?statStatic(k,b.id):('<button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="vinc-from-avulso" data-nome="'+esc(b.nome)+'">→ mensalista</button><button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'" aria-label="Remover">✕</button>'))+'</div></div>');
   }
   if(av.length===0) h.push('<div class="emptymsg">Nenhum avulso neste jogo.</div>');
+  if(!trav){
   if(demoAvulsos.length){ h.push('<div style="margin-top:12px"><div class="sub" style="margin-bottom:6px">Reaproveitar convidado:</div><div class="poschips">');
     for(var w=0;w<demoAvulsos.length;w++){ h.push('<div class="poschip" style="padding-right:4px">+ <span data-action="av-fill" data-id="'+demoAvulsos[w].id+'">'+esc(demoAvulsos[w].nome)+'</span> <span class="avdel" data-action="av-lista-del" data-id="'+demoAvulsos[w].id+'" data-nome="'+esc(demoAvulsos[w].nome)+'" title="Remover da lista">✕</span></div>'); }
     h.push('</div></div>'); }
@@ -1141,6 +1155,7 @@ function renderJogos(){
   h.push('<div class="field"><label for="av_valor">Diária (R$)</label><input id="av_valor" type="text" inputmode="decimal" placeholder="0,00"></div></div>');
   h.push('<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:12px"><input type="checkbox" id="av_pago" style="width:auto"> já pagou a diária</label>');
   h.push('<button class="btn ghost small" data-action="add-avulso">Adicionar avulso</button></div>');
+  } else { h.push('</div>'); }
 
   var pool=poolFor(k);
   h.push('<div class="panel"><div class="eyebrow">Times</div><h2 class="ph">Sorteio</h2>');
@@ -1435,10 +1450,10 @@ document.addEventListener("click", function(ev){
   if(act==="jogo-prev"){ S.jogoSel=shiftJogo(S.jogoSel,-1); S.sorteio=null; render(); return; }
   if(act==="jogo-next"){ S.jogoSel=shiftJogo(S.jogoSel,1); S.sorteio=null; render(); return; }
   if(act==="do-sorteio"){ S.sortPer=val("so_per")||"u3"; var n=parseInt(val("so_n"),10)||2, size=parseInt(val("so_size"),10)||0, modo=val("so_modo"), pl=poolFor(S.jogoSel); var res=(modo==="eq")?drawBalanced(pl,n,size):drawTematico(pl, modo==="supt"?"supt":"area"); res.key=S.jogoSel; res.modo=modo; S.sorteio=res; render(); return; }
-  if(act==="gol-inc"){ setGols(S.jogoSel,id,getGols(S.jogoSel,id)+1); render(); return; }
-  if(act==="gol-dec"){ setGols(S.jogoSel,id,getGols(S.jogoSel,id)-1); render(); return; }
-  if(act==="ast-inc"){ setAssist(S.jogoSel,id,getAssist(S.jogoSel,id)+1); render(); return; }
-  if(act==="ast-dec"){ setAssist(S.jogoSel,id,getAssist(S.jogoSel,id)-1); render(); return; }
+  if(act==="gol-inc"){ if(edicaoBloqueada(S.jogoSel))return; setGols(S.jogoSel,id,getGols(S.jogoSel,id)+1); render(); return; }
+  if(act==="gol-dec"){ if(edicaoBloqueada(S.jogoSel))return; setGols(S.jogoSel,id,getGols(S.jogoSel,id)-1); render(); return; }
+  if(act==="ast-inc"){ if(edicaoBloqueada(S.jogoSel))return; setAssist(S.jogoSel,id,getAssist(S.jogoSel,id)+1); render(); return; }
+  if(act==="ast-dec"){ if(edicaoBloqueada(S.jogoSel))return; setAssist(S.jogoSel,id,getAssist(S.jogoSel,id)-1); render(); return; }
   if(act==="share-sorteio"){ if(!S.sorteio||S.sorteio.erro){ toast("Sorteie os times primeiro"); return; } var txt=sorteioTexto(S.sorteio); if(navigator.share){ navigator.share({text:txt}).catch(function(){ shareModal(txt); }); } else { shareModal(txt); } return; }
   if(act==="copy-share"){ var ta=document.getElementById("shareTxt"); if(ta&&navigator.clipboard){ navigator.clipboard.writeText(ta.value); } else if(ta){ ta.select(); try{document.execCommand("copy");}catch(e){} } toast("Times copiados"); closeModal(); return; }
   if(act==="set-nota"){ setNota(S.avaliarJogo, me().id, el.getAttribute("data-alvo"), parseInt(el.getAttribute("data-val"),10)); toast("Nota registrada"); render(); return; }
@@ -1452,12 +1467,13 @@ document.addEventListener("click", function(ev){
   if(act==="rank-per"){ S.rankPer=el.getAttribute("data-p"); render(); return; }
   if(act==="set-base"){ setBase(me().id, el.getAttribute("data-alvo"), parseInt(el.getAttribute("data-val"),10)); toast("Nota geral registrada"); render(); return; }
   if(act==="clear-base"){ setBase(me().id, el.getAttribute("data-alvo"), 0); toast("Nota geral removida"); render(); return; }
-  if(act==="pres-on"){ var jo=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jo.presenca[id]===true?null:true); render(); return; }
-  if(act==="pres-off"){ var jf=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jf.presenca[id]===false?null:false); render(); return; }
+  if(act==="pres-on"){ if(edicaoBloqueada(S.jogoSel))return; var jo=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jo.presenca[id]===true?null:true); render(); return; }
+  if(act==="pres-off"){ if(edicaoBloqueada(S.jogoSel))return; var jf=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jf.presenca[id]===false?null:false); render(); return; }
+  if(act==="toggle-travar"){ if(!amMaster())return; var tk=el.getAttribute("data-k"); jogoSetTravado(tk, jogoTravado(tk)?false:true); toast(jogoTravado(tk)?"Jogo travado":"Jogo reaberto"); render(); return; }
   if(act==="av-lista-del"){ var nm=el.getAttribute("data-nome")||"este convidado"; confirmModal("Remover convidado","Tirar \""+nm+"\" da lista de reaproveitar? (não afeta jogos já lançados)",function(){ for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id){ demoAvulsos.splice(ai,1); break; } } if(FB) db.collection("avulsos").doc(id).delete().catch(fbCatch()); closeModal(); toast("Convidado removido da lista"); render(); },true); return; }
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
-  if(act==="add-avulso"){ var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
-  if(act==="av-pago"){ var aa=findJogoAvulso(S.jogoSel,id); if(aa){ aa.pago=!aa.pago; if(FB) jogoArrWrite(S.jogoSel); toast(aa.pago?"Diária recebida — entrou no caixa":"Marcado em aberto"); render(); } return; }
+  if(act==="add-avulso"){ if(edicaoBloqueada(S.jogoSel))return; var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
+  if(act==="av-pago"){ if(edicaoBloqueada(S.jogoSel))return; var aa=findJogoAvulso(S.jogoSel,id); if(aa){ aa.pago=!aa.pago; if(FB) jogoArrWrite(S.jogoSel); toast(aa.pago?"Diária recebida — entrou no caixa":"Marcado em aberto"); render(); } return; }
   if(act==="vinc-from-player"){ if(!amAdm()) return; vincularModal(null, el.getAttribute("data-id")); return; }
   if(act==="vinc-from-avulso"){ if(!amAdm()) return; vincularModal(el.getAttribute("data-nome"), null); return; }
   if(act==="vinc-do"){ if(!amAdm()) return; var nome=val("vinc_nome"), uid=val("vinc_uid"); if(!nome||!uid){ toast("Escolha o avulso e o cadastro"); return; } var alvo=dbGet(uid), qa=contaAvulsoAparicoes(nome);
