@@ -1108,7 +1108,7 @@ function proximoJogoCard(u){
   h.push('</div>'); return h.join("");
 }
 function renderJogos(){
-  var cfg=dbConfig(); if(!S.jogoSel) S.jogoSel=proximoJogoKey(); var k=S.jogoSel, j=dbJogo(k);
+  var cfg=dbConfig(); var k=(S.jogoManual&&S.jogoSel)?S.jogoSel:proximoJogoKey(); S.jogoSel=k; var j=dbJogo(k);
   var all=dbAllPlayers(), mens=[]; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.mensalista&&p.status==="aprovado"&&p.ativo) mens.push(p); }
   var nsim=0,nnao=0; for(var a=0;a<mens.length;a++){ var c=j.confirm[mens[a].id]; if(c==="sim")nsim++; else if(c==="nao")nnao++; }
   var nsem=mens.length-nsim-nnao, isProx=(k===proximoJogoKey()), trav=jogoTravado(k);
@@ -1411,7 +1411,7 @@ document.addEventListener("click", function(ev){
   if(act==="google-cancel"){ S.googleNew=false; S.form=null; S.msg=null; if(FB&&auth.currentUser) auth.signOut(); render(); return; }
   if(act==="do-google-complete"){ doGoogleComplete(); return; }
   if(act==="logout"){ if(FB){ S.edit=null; S.form=null; S.googleNew=false; S.forgot=false; S.sorteio=null; auth.signOut(); return; } S.sessionId=null; S.view="auth"; S.authTab="login"; S.forgot=false; S.googleNew=false; S.msg=null; S.edit=null; S.form=null; render(); return; }
-  if(act==="app-tab"){ S.appTab=el.getAttribute("data-tab"); S.msg=null; S.avaliarJogo=null; if(S.appTab==="cadastro"){ S.edit=null; ensureEdit(); } if(S.appTab==="tesouraria" && !S.tesMes){ S.tesMes=todayKey(); } if(S.appTab==="jogos" && !S.jogoSel){ S.jogoSel=proximoJogoKey(); } render(); return; }
+  if(act==="app-tab"){ S.appTab=el.getAttribute("data-tab"); S.msg=null; S.avaliarJogo=null; if(S.appTab==="cadastro"){ S.edit=null; ensureEdit(); } if(S.appTab==="tesouraria" && !S.tesMes){ S.tesMes=todayKey(); } if(S.appTab==="jogos"){ S.jogoManual=false; } render(); return; }
 
   if(act==="pick-princ"){ syncActiveForm(); var t=formTarget(); t.princ=el.getAttribute("data-pos"); if(t.sec===t.princ) t.sec=""; render(); return; }
   if(act==="pick-sec"){ syncActiveForm(); var t2=formTarget(); t2.sec=el.getAttribute("data-pos"); render(); return; }
@@ -1446,9 +1446,9 @@ document.addEventListener("click", function(ev){
   // Jogos / presença / avulsos
   if(act==="confirm-sim"){ var u=me(), k=proximoJogoKey(), jp=dbJogoPeek(k), cur=jp?jp.confirm[u.id]:null; setConfirm(u.id,k, cur==="sim"?null:"sim"); toast(cur==="sim"?"Confirmação removida":"Presença confirmada"); render(); return; }
   if(act==="confirm-nao"){ var u2=me(), k2=proximoJogoKey(), jp2=dbJogoPeek(k2), cur2=jp2?jp2.confirm[u2.id]:null; setConfirm(u2.id,k2, cur2==="nao"?null:"nao"); toast(cur2==="nao"?"Resposta removida":"Marcado que não vai"); render(); return; }
-  if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim() }); S.jogoSel=proximoJogoKey(); toast("Dia do jogo salvo"); render(); return; }
-  if(act==="jogo-prev"){ S.jogoSel=shiftJogo(S.jogoSel,-1); S.sorteio=null; render(); return; }
-  if(act==="jogo-next"){ S.jogoSel=shiftJogo(S.jogoSel,1); S.sorteio=null; render(); return; }
+  if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim() }); S.jogoManual=false; S.jogoSel=proximoJogoKey(); toast("Dia do jogo salvo"); render(); return; }
+  if(act==="jogo-prev"){ S.jogoManual=true; S.jogoSel=shiftJogo(S.jogoSel||proximoJogoKey(),-1); S.sorteio=null; render(); return; }
+  if(act==="jogo-next"){ S.jogoManual=true; S.jogoSel=shiftJogo(S.jogoSel||proximoJogoKey(),1); S.sorteio=null; render(); return; }
   if(act==="do-sorteio"){ S.sortPer=val("so_per")||"u3"; var n=parseInt(val("so_n"),10)||2, size=parseInt(val("so_size"),10)||0, modo=val("so_modo"), pl=poolFor(S.jogoSel); var res=(modo==="eq")?drawBalanced(pl,n,size):drawTematico(pl, modo==="supt"?"supt":"area"); res.key=S.jogoSel; res.modo=modo; S.sorteio=res; render(); return; }
   if(act==="gol-inc"){ if(edicaoBloqueada(S.jogoSel))return; setGols(S.jogoSel,id,getGols(S.jogoSel,id)+1); render(); return; }
   if(act==="gol-dec"){ if(edicaoBloqueada(S.jogoSel))return; setGols(S.jogoSel,id,getGols(S.jogoSel,id)-1); render(); return; }
