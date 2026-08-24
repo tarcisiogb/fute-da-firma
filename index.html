@@ -260,10 +260,10 @@ var firebaseConfig = {
 var DEMO = (!firebaseConfig.apiKey || firebaseConfig.apiKey === "COLE_AQUI");
 var FB = (!DEMO && typeof firebase !== "undefined" && firebase.initializeApp);
 var auth=null, db=null;
-if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); try{ db.settings({ experimentalForceLongPolling:true }); }catch(_){} }catch(e){ FB=false; } }
+if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24c · goleiro convidado no sorteio";
+var BUILD = "2026-08-24d · fix conexão/login";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -1210,7 +1210,7 @@ function renderApp(){
   h.push('<div style="text-align:center;color:var(--ink-soft);opacity:.5;font-size:10.5px;padding:16px 0 6px">build '+esc(BUILD)+'</div>');
   h.push('</div>'); return h.join("");
 }
-function dadosProntos(){ if(!FB) return true; var l=S._ld||{}; return !!(l.cfg&&l.players&&l.jogos&&l.confirm&&l.mensal&&l.notas&&l.base); }
+function dadosProntos(){ if(!FB) return true; var l=S._ld||{}; return !!(l.cfg&&l.players&&l.jogos); }
 function renderLoading(){ var slow=S._ldSlow?'<div style="margin-top:8px;font-size:12.5px;color:var(--ink-soft);max-width:280px;text-align:center;line-height:1.5">Está demorando mais que o normal — pode ser a conexão.</div><button class="btn ghost small" data-action="reload" style="margin-top:8px">Recarregar</button>':''; return '<style>@keyframes ftspin{to{transform:rotate(360deg)}}</style><div style="min-height:62vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--grass-deep)"><div style="width:46px;height:46px;border:4px solid #cfe6d8;border-top-color:var(--grass);border-radius:50%;animation:ftspin .8s linear infinite"></div><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:15px">Carregando o fute…</div>'+slow+'</div>'; }
 function kickFirestore(){ if(!FB) return; try{ db.disableNetwork().then(function(){ return db.enableNetwork(); }).catch(function(){}); }catch(e){} }
 function render(){ if(S.view==="app" && !dadosProntos()){ document.getElementById("app").innerHTML=renderLoading(); return; } document.getElementById("app").innerHTML=(S.view==="auth")?renderAuth():renderApp(); setFavicon(); if(S.view==="app"){ var nav=document.querySelector("nav.tabs"); if(nav){ var b=nav.querySelector("button.on"); if(b) nav.scrollLeft=Math.max(0, b.offsetLeft-(nav.clientWidth-b.clientWidth)/2); } maybeCelebracao(); } }
@@ -1587,7 +1587,7 @@ function seedDemo(){ if(!DEMO) return; var m=todayKey(), pm=shiftMonth(m,-1);
   demoComentarios[past+"|u_bruno|u_master"]="Craque, obrigado pelas assistências!"; demoComentTime[past+"|u_bruno|u_master"]=Date.now();
   demoComentarios[past+"|u_diego|u_master"]="Comandante de sempre."; demoComentTime[past+"|u_diego|u_master"]=Date.now();
 }
-if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); setTimeout(function(){ if(!dadosProntos()){ S._ldSlow=true; render(); kickFirestore(); } }, 5000); setTimeout(function(){ if(!dadosProntos()){ S._ldSlow=true; render(); } }, 9000); render(); }
+if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); setTimeout(function(){ if(S.view==="app" && !dadosProntos()){ S._ldSlow=true; render(); kickFirestore(); } }, 6000); setTimeout(function(){ if(S.view==="app" && !dadosProntos()){ S._ldSlow=true; render(); } }, 10000); render(); }
 else { if(DEMO) seedDemo(); render(); }
 document.addEventListener("visibilitychange", function(){ if(document.hidden) return; var ae=document.activeElement; if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT")) return; if(FB && !dadosProntos()) kickFirestore(); render(); });
 window.addEventListener("pageshow", function(ev){ if(ev && ev.persisted){ if(FB && !dadosProntos()) kickFirestore(); render(); } });
