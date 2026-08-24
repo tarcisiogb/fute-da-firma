@@ -263,7 +263,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24d · fix conexão/login";
+var BUILD = "2026-08-24e · estável (revertido)";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -602,16 +602,16 @@ function subscribePublic(){ if(S._subPub) return; S._subPub=true;
   db.collection("supts").onSnapshot(function(qs){ demoSupts=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoSupts.push(o); }); render(); }, fbCatch());
 }
 function subscribeAll(){ if(S._subscribed) return; S._subscribed=true;
-  db.collection("jogadores").onSnapshot(function(qs){ demoPlayers=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoPlayers.push(o); }); (S._ld=S._ld||{}).players=true; render(); }, fbCatch());
-  db.collection("config").doc("app").onSnapshot(function(d){ if(d.exists){ var c=d.data(),k; for(k in c) demoConfig[k]=c[k]; } (S._ld=S._ld||{}).cfg=true; render(); }, fbCatch());
-  db.collection("mensalidades").onSnapshot(function(qs){ demoMensalidades={}; qs.forEach(function(d){ var o=d.data(); if(o.uid&&o.mes) demoMensalidades[o.uid+"|"+o.mes]={pago:o.pago,data:o.data,valor:o.valor}; }); (S._ld=S._ld||{}).mensal=true; render(); }, fbCatch());
+  db.collection("jogadores").onSnapshot(function(qs){ demoPlayers=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoPlayers.push(o); }); render(); }, fbCatch());
+  db.collection("config").doc("app").onSnapshot(function(d){ if(d.exists){ var c=d.data(),k; for(k in c) demoConfig[k]=c[k]; } render(); }, fbCatch());
+  db.collection("mensalidades").onSnapshot(function(qs){ demoMensalidades={}; qs.forEach(function(d){ var o=d.data(); if(o.uid&&o.mes) demoMensalidades[o.uid+"|"+o.mes]={pago:o.pago,data:o.data,valor:o.valor}; }); render(); }, fbCatch());
   db.collection("despesas").onSnapshot(function(qs){ demoDespesas=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoDespesas.push(o); }); render(); }, fbCatch());
   db.collection("avulsos").onSnapshot(function(qs){ demoAvulsos=[]; qs.forEach(function(d){ var o=d.data(); o.id=d.id; demoAvulsos.push(o); }); render(); }, fbCatch());
-  db.collection("jogos").onSnapshot(function(qs){ qs.forEach(function(d){ var o=d.data(); var j=dbJogo(d.id); j.presenca=o.presenca||{}; j.gols=o.gols||{}; j.assist=o.assist||{}; j.avulsos=o.avulsos||[]; j.encerrado=!!o.encerrado; j.travado=(o.travado===true?true:(o.travado===false?false:undefined)); }); (S._ld=S._ld||{}).jogos=true; render(); }, fbCatch());
-  db.collectionGroup("confirmacoes").onSnapshot(function(qs){ var k; for(k in demoJogos) demoJogos[k].confirm={}; qs.forEach(function(d){ var jk=d.ref.parent.parent.id; dbJogo(jk).confirm[d.id]=d.data().resp; }); (S._ld=S._ld||{}).confirm=true; render(); }, fbCatch());
-  db.collectionGroup("notas").onSnapshot(function(qs){ demoNotas={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.avaliador&&o.alvo&&o.nota) demoNotas[jk+"|"+o.avaliador+"|"+o.alvo]=o.nota; }); (S._ld=S._ld||{}).notas=true; render(); }, fbCatch());
+  db.collection("jogos").onSnapshot(function(qs){ qs.forEach(function(d){ var o=d.data(); var j=dbJogo(d.id); j.presenca=o.presenca||{}; j.gols=o.gols||{}; j.assist=o.assist||{}; j.avulsos=o.avulsos||[]; j.encerrado=!!o.encerrado; j.travado=(o.travado===true?true:(o.travado===false?false:undefined)); }); render(); }, fbCatch());
+  db.collectionGroup("confirmacoes").onSnapshot(function(qs){ var k; for(k in demoJogos) demoJogos[k].confirm={}; qs.forEach(function(d){ var jk=d.ref.parent.parent.id; dbJogo(jk).confirm[d.id]=d.data().resp; }); render(); }, fbCatch());
+  db.collectionGroup("notas").onSnapshot(function(qs){ demoNotas={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.avaliador&&o.alvo&&o.nota) demoNotas[jk+"|"+o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
   db.collectionGroup("premios").onSnapshot(function(qs){ demoPremios={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id, vt=o.votante||d.id, vs=o.votos||{}; for(var pr in vs){ if(vs[pr]) demoPremios[jk+"|"+vt+"|"+pr]=vs[pr]; } }); render(); }, fbCatch());
-  db.collection("notasbase").onSnapshot(function(qs){ demoBase={}; qs.forEach(function(d){ var o=d.data(); if(o.avaliador&&o.alvo&&o.nota) demoBase[o.avaliador+"|"+o.alvo]=o.nota; }); (S._ld=S._ld||{}).base=true; render(); }, fbCatch());
+  db.collection("notasbase").onSnapshot(function(qs){ demoBase={}; qs.forEach(function(d){ var o=d.data(); if(o.avaliador&&o.alvo&&o.nota) demoBase[o.avaliador+"|"+o.alvo]=o.nota; }); render(); }, fbCatch());
   db.collectionGroup("comentarios").onSnapshot(function(qs){ demoComentarios={}; demoComentTime={}; qs.forEach(function(d){ var o=d.data(); var jk=d.ref.parent.parent.id; if(o.autor&&o.alvo&&o.texto){ var kk=jk+"|"+o.autor+"|"+o.alvo; demoComentarios[kk]=o.texto; demoComentTime[kk]=o.criadoEm||0; } }); render(); }, fbCatch());
 }
 
@@ -1210,10 +1210,7 @@ function renderApp(){
   h.push('<div style="text-align:center;color:var(--ink-soft);opacity:.5;font-size:10.5px;padding:16px 0 6px">build '+esc(BUILD)+'</div>');
   h.push('</div>'); return h.join("");
 }
-function dadosProntos(){ if(!FB) return true; var l=S._ld||{}; return !!(l.cfg&&l.players&&l.jogos); }
-function renderLoading(){ var slow=S._ldSlow?'<div style="margin-top:8px;font-size:12.5px;color:var(--ink-soft);max-width:280px;text-align:center;line-height:1.5">Está demorando mais que o normal — pode ser a conexão.</div><button class="btn ghost small" data-action="reload" style="margin-top:8px">Recarregar</button>':''; return '<style>@keyframes ftspin{to{transform:rotate(360deg)}}</style><div style="min-height:62vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--grass-deep)"><div style="width:46px;height:46px;border:4px solid #cfe6d8;border-top-color:var(--grass);border-radius:50%;animation:ftspin .8s linear infinite"></div><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:15px">Carregando o fute…</div>'+slow+'</div>'; }
-function kickFirestore(){ if(!FB) return; try{ db.disableNetwork().then(function(){ return db.enableNetwork(); }).catch(function(){}); }catch(e){} }
-function render(){ if(S.view==="app" && !dadosProntos()){ document.getElementById("app").innerHTML=renderLoading(); return; } document.getElementById("app").innerHTML=(S.view==="auth")?renderAuth():renderApp(); setFavicon(); if(S.view==="app"){ var nav=document.querySelector("nav.tabs"); if(nav){ var b=nav.querySelector("button.on"); if(b) nav.scrollLeft=Math.max(0, b.offsetLeft-(nav.clientWidth-b.clientWidth)/2); } maybeCelebracao(); } }
+function render(){ document.getElementById("app").innerHTML=(S.view==="auth")?renderAuth():renderApp(); setFavicon(); if(S.view==="app"){ var nav=document.querySelector("nav.tabs"); if(nav){ var b=nav.querySelector("button.on"); if(b) nav.scrollLeft=Math.max(0, b.offsetLeft-(nav.clientWidth-b.clientWidth)/2); } maybeCelebracao(); } }
 
 /* =====================================================================
    AÇÕES
@@ -1423,7 +1420,6 @@ function handleGoogle(email, nome){ var p=dbGetByEmail(email); if(p){ loginPlaye
 document.addEventListener("click", function(ev){
   var el=ev.target.closest?ev.target.closest("[data-action]"):null; if(!el) return;
   var act=el.getAttribute("data-action"), id=el.getAttribute("data-id");
-  if(act==="reload"){ location.reload(); return; }
 
   if(act==="auth-tab"){ var tb=el.getAttribute("data-tab"); S.authTab=tb; S.forgot=false; S.googleNew=false; S.msg=null; if(tb==="signup"){ initForm(); } render(); return; }
   if(act==="forgot-open"){ S.forgot=true; S.msg=null; render(); return; }
@@ -1587,10 +1583,8 @@ function seedDemo(){ if(!DEMO) return; var m=todayKey(), pm=shiftMonth(m,-1);
   demoComentarios[past+"|u_bruno|u_master"]="Craque, obrigado pelas assistências!"; demoComentTime[past+"|u_bruno|u_master"]=Date.now();
   demoComentarios[past+"|u_diego|u_master"]="Comandante de sempre."; demoComentTime[past+"|u_diego|u_master"]=Date.now();
 }
-if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); setTimeout(function(){ if(S.view==="app" && !dadosProntos()){ S._ldSlow=true; render(); kickFirestore(); } }, 6000); setTimeout(function(){ if(S.view==="app" && !dadosProntos()){ S._ldSlow=true; render(); } }, 10000); render(); }
+if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); render(); }
 else { if(DEMO) seedDemo(); render(); }
-document.addEventListener("visibilitychange", function(){ if(document.hidden) return; var ae=document.activeElement; if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT")) return; if(FB && !dadosProntos()) kickFirestore(); render(); });
-window.addEventListener("pageshow", function(ev){ if(ev && ev.persisted){ if(FB && !dadosProntos()) kickFirestore(); render(); } });
 </script>
 </body>
 </html>
