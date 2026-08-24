@@ -263,7 +263,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24e · estável (revertido)";
+var BUILD = "2026-08-24f · remover avulso";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -398,7 +398,12 @@ function vincularModal(fixNome,fixUid){ var aprov=dbAllPlayers().filter(function
   h.push('</select></div>');
   h.push('<div class="row" style="margin-top:14px"><button class="btn ghost" data-action="modal-close">Cancelar</button><button class="btn" data-action="vinc-do">Vincular histórico</button></div>');
   h.push('</div></div>'); document.getElementById("modalHost").innerHTML=h.join(""); }
-function delAvulsoFromJogo(k,id){ var j=dbJogo(k); for(var i=0;i<j.avulsos.length;i++){ if(j.avulsos[i].id===id){ j.avulsos.splice(i,1); if(FB) jogoArrWrite(k); return; } } }
+function delAvulsoFromJogo(k,id){ var j=dbJogo(k),i; for(i=0;i<j.avulsos.length;i++){ if(j.avulsos[i].id===id){ j.avulsos.splice(i,1); break; } }
+  if(j.gols&&j.gols[id]!=null) setGols(k,id,0);
+  if(j.assist&&j.assist[id]!=null) setAssist(k,id,0);
+  Object.keys(demoNotas).forEach(function(nk){ var p=nk.split("|"); if(p[0]===k&&p[2]===id) setNota(k,p[1],id,0); });
+  Object.keys(demoPremios).forEach(function(pk){ var pp=pk.split("|"); if(pp[0]===k&&demoPremios[pk]===id) setVoto(k,pp[1],pp[2],null); });
+  if(FB) jogoArrWrite(k); }
 function findJogoAvulso(k,id){ var j=dbJogo(k); for(var i=0;i<j.avulsos.length;i++){ if(j.avulsos[i].id===id) return j.avulsos[i]; } return null; }
 function dbAddAvulsoLista(o){ var ex=findByName(demoAvulsos,o.nome); if(ex) return ex; if(FB){ db.collection("avulsos").add({nome:o.nome,posPrincipal:o.posPrincipal,posSecundaria:o.posSecundaria||null,nota:o.nota||3}).catch(fbCatch()); return o; } o.id="av_"+Date.now(); demoAvulsos.push(o); return o; }
 function avulsoPagosAll(){ var s=0,k; for(k in demoJogos){ var av=demoJogos[k].avulsos; for(var i=0;i<av.length;i++){ if(av[i].pago) s+=(av[i].valor||0); } } return s; }
@@ -1149,7 +1154,7 @@ function renderJogos(){
   for(var x=0;x<av.length;x++){ var b=av[x];
     h.push('<div class="prow"><div class="pav">'+esc(initials(b.nome))+'</div><div class="pinfo"><div class="pname">'+esc(b.nome)+'</div><div class="pmeta"><span class="badge pos">'+esc(posLabel(b.posPrincipal))+'</span>'+(b.posSecundaria?' <span class="badge pos2">'+esc(posLabel(b.posSecundaria))+' · 2ª</span>':'')+' '+starsDisplay(b.nota)+'</div>');
     h.push('<div class="submeta">diária '+formatBRL(b.valor)+' · '+(b.pago?'<b style="color:var(--grass-deep)">pago</b>':'em aberto')+'</div></div>');
-    h.push('<div class="pacts">'+(trav?statStatic(k,b.id):('<button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="vinc-from-avulso" data-nome="'+esc(b.nome)+'">→ mensalista</button><button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'" aria-label="Remover">✕</button>'))+'</div></div>');
+    h.push('<div class="pacts">'+(trav?(statStatic(k,b.id)+(amMaster()?'<button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'">Remover</button>':'')):('<button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="vinc-from-avulso" data-nome="'+esc(b.nome)+'">→ mensalista</button><button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'">Remover</button>'))+'</div></div>');
   }
   if(av.length===0) h.push('<div class="emptymsg">Nenhum avulso neste jogo.</div>');
   if(!trav){
@@ -1503,6 +1508,7 @@ document.addEventListener("click", function(ev){
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
   if(act==="add-avulso"){ if(edicaoBloqueada(S.jogoSel))return; var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
   if(act==="av-pago"){ if(edicaoBloqueada(S.jogoSel))return; var aa=findJogoAvulso(S.jogoSel,id); if(aa){ aa.pago=!aa.pago; if(FB) jogoArrWrite(S.jogoSel); toast(aa.pago?"Diária recebida — entrou no caixa":"Marcado em aberto"); render(); } return; }
+  if(act==="av-del"){ if(!amAdm())return; if(jogoTravado(S.jogoSel)&&!amMaster()){ toast("Jogo travado — o Master precisa reabrir"); return; } confirmModal("Remover avulso","Tirar este avulso do jogo? Os gols/assistências dele nesta rodada também saem.",function(){ delAvulsoFromJogo(S.jogoSel,id); closeModal(); toast("Avulso removido"); render(); },true); return; }
   if(act==="vinc-from-player"){ if(!amAdm()) return; vincularModal(null, el.getAttribute("data-id")); return; }
   if(act==="vinc-from-avulso"){ if(!amAdm()) return; vincularModal(el.getAttribute("data-nome"), null); return; }
   if(act==="vinc-do"){ if(!amAdm()) return; var nome=val("vinc_nome"), uid=val("vinc_uid"); if(!nome||!uid){ toast("Escolha o avulso e o cadastro"); return; } var alvo=dbGet(uid), qa=contaAvulsoAparicoes(nome);
