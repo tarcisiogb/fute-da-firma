@@ -260,10 +260,10 @@ var firebaseConfig = {
 var DEMO = (!firebaseConfig.apiKey || firebaseConfig.apiKey === "COLE_AQUI");
 var FB = (!DEMO && typeof firebase !== "undefined" && firebase.initializeApp);
 var auth=null, db=null;
-if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
+if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); try{ db.settings({ experimentalForceLongPolling:true }); }catch(_){} }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24 · ordenação + goleiros fixos + loading";
+var BUILD = "2026-08-24c · goleiro convidado no sorteio";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -1185,7 +1185,9 @@ function renderJogos(){
   var _temGk=false;
   for(var gi=0;gi<pool.length;gi++){ var gp=pool[gi], isGk=(gp.pos==="goleiro"); if(isGk)_temGk=true; h.push('<label class="poschip" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px"><input type="checkbox" class="gkfix" value="'+esc(gp.id)+'" style="width:auto"'+(isGk?" checked":"")+'> '+esc(gp.nome)+(isGk?' 🧤':'')+'</label>'); }
   if(!pool.length) h.push('<span class="muted" style="font-size:12px">Ninguém no pool ainda.</span>');
-  h.push('</div><div class="muted" style="font-size:11.5px;margin-top:4px">Os marcados saem do sorteio e revezam no gol; os times são formados só com o pessoal de linha. Ex.: 2 goleiros fixos + 4 times de 5.</div></div>');
+  h.push('</div>');
+  h.push('<div style="display:flex;gap:6px;margin-top:8px"><input id="gk_novo" type="text" placeholder="Goleiro convidado (nome)" style="flex:1;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px"><button class="btn ghost small" data-action="add-gk-avulso" style="white-space:nowrap">+ Goleiro</button></div>');
+  h.push('<div class="muted" style="font-size:11.5px;margin-top:4px">Os marcados saem do sorteio e revezam no gol; os times são formados só com o pessoal de linha. Avulsos já adicionados ao jogo aparecem na lista; use "+ Goleiro" pra incluir um convidado que só fica no gol.</div></div>');
   h.push('<button class="btn" data-action="do-sorteio">Sortear times</button>');
   if(S.sorteio && S.sorteio.key===k) h.push(renderSorteioResult(S.sorteio));
   h.push('</div>');
@@ -1208,8 +1210,9 @@ function renderApp(){
   h.push('<div style="text-align:center;color:var(--ink-soft);opacity:.5;font-size:10.5px;padding:16px 0 6px">build '+esc(BUILD)+'</div>');
   h.push('</div>'); return h.join("");
 }
-function dadosProntos(){ if(!FB) return true; if(S._ldTimeout) return true; var l=S._ld||{}; return !!(l.cfg&&l.players&&l.jogos&&l.confirm&&l.mensal&&l.notas&&l.base); }
-function renderLoading(){ return '<style>@keyframes ftspin{to{transform:rotate(360deg)}}</style><div style="min-height:62vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;color:var(--grass-deep)"><div style="width:46px;height:46px;border:4px solid #cfe6d8;border-top-color:var(--grass);border-radius:50%;animation:ftspin .8s linear infinite"></div><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:15px">Carregando o fute…</div></div>'; }
+function dadosProntos(){ if(!FB) return true; var l=S._ld||{}; return !!(l.cfg&&l.players&&l.jogos&&l.confirm&&l.mensal&&l.notas&&l.base); }
+function renderLoading(){ var slow=S._ldSlow?'<div style="margin-top:8px;font-size:12.5px;color:var(--ink-soft);max-width:280px;text-align:center;line-height:1.5">Está demorando mais que o normal — pode ser a conexão.</div><button class="btn ghost small" data-action="reload" style="margin-top:8px">Recarregar</button>':''; return '<style>@keyframes ftspin{to{transform:rotate(360deg)}}</style><div style="min-height:62vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--grass-deep)"><div style="width:46px;height:46px;border:4px solid #cfe6d8;border-top-color:var(--grass);border-radius:50%;animation:ftspin .8s linear infinite"></div><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:15px">Carregando o fute…</div>'+slow+'</div>'; }
+function kickFirestore(){ if(!FB) return; try{ db.disableNetwork().then(function(){ return db.enableNetwork(); }).catch(function(){}); }catch(e){} }
 function render(){ if(S.view==="app" && !dadosProntos()){ document.getElementById("app").innerHTML=renderLoading(); return; } document.getElementById("app").innerHTML=(S.view==="auth")?renderAuth():renderApp(); setFavicon(); if(S.view==="app"){ var nav=document.querySelector("nav.tabs"); if(nav){ var b=nav.querySelector("button.on"); if(b) nav.scrollLeft=Math.max(0, b.offsetLeft-(nav.clientWidth-b.clientWidth)/2); } maybeCelebracao(); } }
 
 /* =====================================================================
@@ -1420,6 +1423,7 @@ function handleGoogle(email, nome){ var p=dbGetByEmail(email); if(p){ loginPlaye
 document.addEventListener("click", function(ev){
   var el=ev.target.closest?ev.target.closest("[data-action]"):null; if(!el) return;
   var act=el.getAttribute("data-action"), id=el.getAttribute("data-id");
+  if(act==="reload"){ location.reload(); return; }
 
   if(act==="auth-tab"){ var tb=el.getAttribute("data-tab"); S.authTab=tb; S.forgot=false; S.googleNew=false; S.msg=null; if(tb==="signup"){ initForm(); } render(); return; }
   if(act==="forgot-open"){ S.forgot=true; S.msg=null; render(); return; }
@@ -1469,6 +1473,7 @@ document.addEventListener("click", function(ev){
   if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim() }); S.jogoManual=false; S.jogoSel=proximoJogoKey(); toast("Dia do jogo salvo"); render(); return; }
   if(act==="jogo-prev"){ S.jogoManual=true; S.jogoSel=shiftJogo(S.jogoSel||proximoJogoKey(),-1); S.sorteio=null; render(); return; }
   if(act==="jogo-next"){ S.jogoManual=true; S.jogoSel=shiftJogo(S.jogoSel||proximoJogoKey(),1); S.sorteio=null; render(); return; }
+  if(act==="add-gk-avulso"){ if(!amAdm())return; if(edicaoBloqueada(S.jogoSel))return; var nm=(val("gk_novo")||"").trim(); if(!nm){ toast("Digite o nome do goleiro"); return; } addAvulsoToJogo(S.jogoSel,{nome:nm,posPrincipal:"goleiro",posSecundaria:null,nota:3,pago:false}); toast("Goleiro convidado adicionado"); render(); return; }
   if(act==="do-sorteio"){ S.sortPer=val("so_per")||"u3"; var n=parseInt(val("so_n"),10)||2, size=parseInt(val("so_size"),10)||0, modo=val("so_modo");
     var gkIds={}, cbs=document.querySelectorAll(".gkfix:checked"); for(var gc=0;gc<cbs.length;gc++) gkIds[cbs[gc].value]=1;
     var full=poolFor(S.jogoSel), res;
@@ -1582,10 +1587,10 @@ function seedDemo(){ if(!DEMO) return; var m=todayKey(), pm=shiftMonth(m,-1);
   demoComentarios[past+"|u_bruno|u_master"]="Craque, obrigado pelas assistências!"; demoComentTime[past+"|u_bruno|u_master"]=Date.now();
   demoComentarios[past+"|u_diego|u_master"]="Comandante de sempre."; demoComentTime[past+"|u_diego|u_master"]=Date.now();
 }
-if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); setTimeout(function(){ S._ldTimeout=true; render(); }, 6000); render(); }
+if(FB){ demoPlayers=[]; demoAreas=[]; demoSupts=[]; demoAvulsos=[]; demoMensalidades={}; demoDespesas=[]; demoJogos={}; demoNotas={}; demoPremios={}; demoBase={}; demoComentarios={}; subscribePublic(); auth.onAuthStateChanged(fbAfterAuth); setTimeout(function(){ if(!dadosProntos()){ S._ldSlow=true; render(); kickFirestore(); } }, 5000); setTimeout(function(){ if(!dadosProntos()){ S._ldSlow=true; render(); } }, 9000); render(); }
 else { if(DEMO) seedDemo(); render(); }
-document.addEventListener("visibilitychange", function(){ if(document.hidden) return; var ae=document.activeElement; if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT")) return; render(); });
-window.addEventListener("pageshow", function(ev){ if(ev && ev.persisted) render(); });
+document.addEventListener("visibilitychange", function(){ if(document.hidden) return; var ae=document.activeElement; if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT")) return; if(FB && !dadosProntos()) kickFirestore(); render(); });
+window.addEventListener("pageshow", function(ev){ if(ev && ev.persisted){ if(FB && !dadosProntos()) kickFirestore(); render(); } });
 </script>
 </body>
 </html>
