@@ -263,7 +263,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24f · remover avulso";
+var BUILD = "2026-08-24i · adicionar avulso sempre";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -353,7 +353,8 @@ function jogoMesKey(k){ return k.slice(0,7); }
 function shiftJogo(k,weeks){ var d=parseYMD(k); d.setDate(d.getDate()+weeks*7); return ymd(d); }
 function jogoCloseTime(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,9,0,0,0); }
 function jogoFechado(k){ return new Date().getTime()>=jogoCloseTime(k).getTime(); }
-function confirmAberta(k){ return new Date().getTime() < parseYMD(k).getTime(); }
+function confirmAberta(k){ var d=parseYMD(k), lim=new Date(d.getFullYear(),d.getMonth(),d.getDate()-1); return new Date().getTime() < lim.getTime(); }
+function confirmLimLabel(k){ var d=parseYMD(k), dd=new Date(d.getFullYear(),d.getMonth(),d.getDate()-2); return WEEKDAYS[dd.getDay()]+" "+pad2(dd.getDate())+"/"+pad2(dd.getMonth()+1)+", 23:59"; }
 function porApelido(a,b){ return (a.apelido||a.nome||"").localeCompare(b.apelido||b.nome||"","pt",{sensitivity:"base"}); }
 function jogoTravado(k){ var j=demoJogos[k]||{}; if(j.travado===true) return true; if(j.travado===false) return false; return jogoFechado(k); }
 function jogoSetTravado(k,val){ var j=dbJogo(k); j.travado=val; if(FB) db.collection("jogos").doc(k).set({travado:val},{merge:true}).catch(fbCatch()); }
@@ -1113,11 +1114,11 @@ function proximoJogoCard(u){
       h.push('<div style="display:flex;gap:8px;margin-top:14px">');
       h.push('<button class="btn '+(meu==="sim"?"":"ghost")+'" data-action="confirm-sim">'+(meu==="sim"?"✓ Vou":"Vou")+'</button>');
       h.push('<button class="btn '+(meu==="nao"?"":"ghost")+'" data-action="confirm-nao"'+(meu==="nao"?' style="background:var(--red)"':'')+'>Não vou</button></div>');
-      if(meu) h.push('<div class="muted" style="margin-top:8px">Sua resposta: <b>'+(meu==="sim"?"vou jogar":"não vou")+'</b> — dá pra mudar até 23:59 da véspera.</div>');
-      else h.push('<div class="muted" style="margin-top:8px">Confirme até <b>23:59 da véspera</b>.</div>');
+      if(meu) h.push('<div class="muted" style="margin-top:8px">Sua resposta: <b>'+(meu==="sim"?"vou jogar":"não vou")+'</b> — dá pra mudar até '+confirmLimLabel(k)+'.</div>');
+      else h.push('<div class="muted" style="margin-top:8px">Confirme até <b>'+confirmLimLabel(k)+'</b>.</div>');
     } else {
-      if(meu) h.push('<div class="muted" style="margin-top:14px">Você marcou: <b>'+(meu==="sim"?"vou jogar":"não vou")+'</b>. A confirmação encerrou (23:59 da véspera).</div>');
-      else h.push('<div class="muted" style="margin-top:14px">⏰ A confirmação encerrou (23:59 da véspera). Se ainda vai jogar, fale com um Adm pra te confirmar.</div>');
+      if(meu) h.push('<div class="muted" style="margin-top:14px">Você marcou: <b>'+(meu==="sim"?"vou jogar":"não vou")+'</b>. A confirmação encerrou ('+confirmLimLabel(k)+').</div>');
+      else h.push('<div class="muted" style="margin-top:14px">⏰ A confirmação encerrou ('+confirmLimLabel(k)+'). Se ainda vai jogar, fale com um Adm pra te confirmar.</div>');
     }
   } else {
     h.push('<div class="muted" style="margin-top:12px">A confirmação de presença é dos mensalistas. Se for jogar como avulso, fale com um Adm.</div>');
@@ -1149,7 +1150,7 @@ function renderJogos(){
   if(mens.length===0) h.push('<div class="emptymsg">Nenhum mensalista ativo.</div>');
   h.push('</div>');
 
-  h.push('<div class="panel"><div class="eyebrow">Sem login</div><h2 class="ph">Avulsos do jogo</h2>');
+  h.push('<div class="panel"><div class="eyebrow">Convidados</div><h2 class="ph">Avulsos do jogo</h2>');
   var av=j.avulsos;
   for(var x=0;x<av.length;x++){ var b=av[x];
     h.push('<div class="prow"><div class="pav">'+esc(initials(b.nome))+'</div><div class="pinfo"><div class="pname">'+esc(b.nome)+'</div><div class="pmeta"><span class="badge pos">'+esc(posLabel(b.posPrincipal))+'</span>'+(b.posSecundaria?' <span class="badge pos2">'+esc(posLabel(b.posSecundaria))+' · 2ª</span>':'')+' '+starsDisplay(b.nota)+'</div>');
@@ -1157,7 +1158,6 @@ function renderJogos(){
     h.push('<div class="pacts">'+(trav?(statStatic(k,b.id)+(amMaster()?'<button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'">Remover</button>':'')):('<button class="btn mini '+(b.pago?"ghost":"ok")+'" data-action="av-pago" data-id="'+b.id+'">'+(b.pago?"Em aberto":"Recebi diária")+'</button>'+statStepper(k,b.id)+'<button class="btn mini ghost" data-action="vinc-from-avulso" data-nome="'+esc(b.nome)+'">→ mensalista</button><button class="btn mini ghost" data-action="av-del" data-id="'+b.id+'">Remover</button>'))+'</div></div>');
   }
   if(av.length===0) h.push('<div class="emptymsg">Nenhum avulso neste jogo.</div>');
-  if(!trav){
   if(demoAvulsos.length){ h.push('<div style="margin-top:12px"><div class="sub" style="margin-bottom:6px">Reaproveitar convidado:</div><div class="poschips">');
     for(var w=0;w<demoAvulsos.length;w++){ h.push('<div class="poschip" style="padding-right:4px">+ <span data-action="av-fill" data-id="'+demoAvulsos[w].id+'">'+esc(demoAvulsos[w].nome)+'</span> <span class="avdel" data-action="av-lista-del" data-id="'+demoAvulsos[w].id+'" data-nome="'+esc(demoAvulsos[w].nome)+'" title="Remover da lista">✕</span></div>'); }
     h.push('</div></div>'); }
@@ -1172,7 +1172,6 @@ function renderJogos(){
   h.push('<div class="field"><label for="av_valor">Diária (R$)</label><input id="av_valor" type="text" inputmode="decimal" placeholder="0,00"></div></div>');
   h.push('<label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:12px"><input type="checkbox" id="av_pago" style="width:auto"> já pagou a diária</label>');
   h.push('<button class="btn ghost small" data-action="add-avulso">Adicionar avulso</button></div>');
-  } else { h.push('</div>'); }
 
   var pool=poolFor(k);
   h.push('<div class="panel"><div class="eyebrow">Times</div><h2 class="ph">Sorteio</h2>');
@@ -1506,7 +1505,7 @@ document.addEventListener("click", function(ev){
   if(act==="adm-confirm"){ if(!amAdm())return; var v=el.getAttribute("data-v"); setConfirm(id,S.jogoSel, v==="sim"?"sim":null); toast(v==="sim"?"Confirmado pelo Adm":"Confirmação removida"); render(); return; }
   if(act==="av-lista-del"){ var nm=el.getAttribute("data-nome")||"este convidado"; confirmModal("Remover convidado","Tirar \""+nm+"\" da lista de reaproveitar? (não afeta jogos já lançados)",function(){ for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id){ demoAvulsos.splice(ai,1); break; } } if(FB) db.collection("avulsos").doc(id).delete().catch(fbCatch()); closeModal(); toast("Convidado removido da lista"); render(); },true); return; }
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
-  if(act==="add-avulso"){ if(edicaoBloqueada(S.jogoSel))return; var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
+  if(act==="add-avulso"){ var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
   if(act==="av-pago"){ if(edicaoBloqueada(S.jogoSel))return; var aa=findJogoAvulso(S.jogoSel,id); if(aa){ aa.pago=!aa.pago; if(FB) jogoArrWrite(S.jogoSel); toast(aa.pago?"Diária recebida — entrou no caixa":"Marcado em aberto"); render(); } return; }
   if(act==="av-del"){ if(!amAdm())return; if(jogoTravado(S.jogoSel)&&!amMaster()){ toast("Jogo travado — o Master precisa reabrir"); return; } confirmModal("Remover avulso","Tirar este avulso do jogo? Os gols/assistências dele nesta rodada também saem.",function(){ delAvulsoFromJogo(S.jogoSel,id); closeModal(); toast("Avulso removido"); render(); },true); return; }
   if(act==="vinc-from-player"){ if(!amAdm()) return; vincularModal(null, el.getAttribute("data-id")); return; }
