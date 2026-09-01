@@ -263,7 +263,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24i · adicionar avulso sempre";
+var BUILD = "2026-08-24j · excluir jogo + ranking mês + honra por dia";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -367,6 +367,11 @@ function jogoEmVotacao(){ var pk=proximoJogoKey(), cands=[pk, shiftJogo(pk,-1)],
 function fmtPrazo(k){ var t=jogoCloseTime(k); return pad2(t.getDate())+"/"+pad2(t.getMonth()+1)+" às 09:00"; }
 function dbJogo(k){ if(!demoJogos[k]) demoJogos[k]={confirm:{},presenca:{},avulsos:[],gols:{},assist:{},encerrado:false}; if(!demoJogos[k].gols) demoJogos[k].gols={}; if(!demoJogos[k].assist) demoJogos[k].assist={}; return demoJogos[k]; }
 function dbJogoPeek(k){ return demoJogos[k]||null; }
+function delGame(k){ delete demoJogos[k];
+  Object.keys(demoNotas).forEach(function(x){ if(x.indexOf(k+"|")===0) delete demoNotas[x]; });
+  Object.keys(demoPremios).forEach(function(x){ if(x.indexOf(k+"|")===0) delete demoPremios[x]; });
+  Object.keys(demoComentarios).forEach(function(x){ if(x.indexOf(k+"|")===0){ delete demoComentarios[x]; delete demoComentTime[x]; } });
+  if(FB){ var jr=db.collection("jogos").doc(k); ["confirmacoes","notas","premios","comentarios"].forEach(function(sub){ jr.collection(sub).get().then(function(qs){ qs.forEach(function(d){ d.ref.delete().catch(function(){}); }); }).catch(function(){}); }); jr.delete().catch(fbCatch()); } }
 function setConfirm(uid,k,v){ var j=dbJogo(k); if(v) j.confirm[uid]=v; else delete j.confirm[uid]; if(FB){ var ref=db.collection("jogos").doc(k).collection("confirmacoes").doc(uid); if(v) ref.set({resp:v}).catch(fbCatch()); else ref.delete().catch(fbCatch()); } }
 function setPresenca(uid,k,v){ var j=dbJogo(k); if(v===null||v===undefined) delete j.presenca[uid]; else j.presenca[uid]=v; if(FB) jogoFieldWrite(k,"presenca",uid,(v===null||v===undefined)?null:v); }
 function addAvulsoToJogo(k,o){ var j=dbJogo(k); o.id="ja_"+Date.now()+"_"+Math.floor(Math.random()*999); j.avulsos.push(o); if(FB) jogoArrWrite(k); }
@@ -1011,6 +1016,8 @@ function renderEstatisticas(){
   h.push('</div>');
   h.push('<div class="panel"><div class="eyebrow">Honrarias</div><h2 class="ph">Quadro de honra</h2>');
   var _kh=ultimoJogoHonra(); if(_kh) h.push('<button class="btn ghost small" data-action="celeb-open" data-k="'+esc(_kh)+'" style="margin:2px 0 12px">🏆 Ver comemoração da última rodada</button>');
+  var _hr=jogosRealizados().filter(function(kk){return jogoTemHonra(kk);}).sort(function(a,b){return a<b?1:-1;});
+  if(_hr.length){ h.push('<div class="field" style="margin-bottom:14px"><label for="honra_pick">Ver e compartilhar honrarias de uma rodada</label><select id="honra_pick" class="selin" data-change="honra-pick"><option value="">— escolher rodada —</option>'); for(var hp=0;hp<_hr.length;hp++) h.push('<option value="'+_hr[hp]+'">'+esc(jogoLabel(_hr[hp]))+'</option>'); h.push('</select></div>'); }
   var qh=quadroHonra(per), teveAlgum=false;
   for(var pr=0;pr<PREMIOS.length;pr++){ var pk=PREMIOS[pr][0], mp=qh[pk], arr=[],idk; for(idk in mp) arr.push({id:idk,n:mp[idk]}); arr.sort(function(a,b){return b.n-a.n;});
     h.push('<div class="subhead" style="margin:14px 0 6px">'+premioEmoji(pk)+' '+esc(premioLabel(pk))+'</div>');
@@ -1031,17 +1038,20 @@ function renderEstatisticas(){
   if(jrPer.length===0) h.push('<div class="emptymsg">Nenhum jogo neste período.</div>');
   var rev=jrPer.slice().reverse();
   for(var i=0;i<rev.length&&i<8;i++){ var kk=rev[i], j=demoJogos[kk], np=0,id2; for(id2 in j.presenca){ if(j.presenca[id2]===true)np++; } var na=j.avulsos.length, diarias=0; for(var x=0;x<na;x++){ if(j.avulsos[x].pago) diarias+=j.avulsos[x].valor||0; } var gg2=0,go=j.gols||{},qq; for(qq in go) gg2+=go[qq];
-    h.push('<div class="prow"><div class="pinfo"><div class="pname" style="text-transform:capitalize">'+esc(jogoLabel(kk))+'</div><div class="submeta">'+np+' presentes · '+na+' avulso'+(na===1?'':'s')+' · '+gg2+' gols</div></div><div style="margin-left:auto;text-align:right">'+(diarias>0?'<div class="muted">'+formatBRL(diarias)+'</div>':'')+(jogoTemHonra(kk)?'<button class="btn mini ghost" data-action="celeb-open" data-k="'+esc(kk)+'" style="margin-top:'+(diarias>0?'4px':'0')+'">🏆 Honrarias</button>':'')+'</div></div>'); }
+    h.push('<div class="prow"><div class="pinfo"><div class="pname" style="text-transform:capitalize">'+esc(jogoLabel(kk))+'</div><div class="submeta">'+np+' presentes · '+na+' avulso'+(na===1?'':'s')+' · '+gg2+' gols</div></div><div style="margin-left:auto;text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end">'+(diarias>0?'<div class="muted">'+formatBRL(diarias)+'</div>':'')+(jogoTemHonra(kk)?'<button class="btn mini ghost" data-action="celeb-open" data-k="'+esc(kk)+'">🏆 Honrarias</button>':'')+(amMaster()?'<button class="btn mini ghost" data-action="del-jogo" data-k="'+esc(kk)+'" style="color:var(--red)">Excluir</button>':'')+'</div></div>'); }
   h.push('</div>'); return h.join("");
 }
 function renderRanking(){
   if(!S.rankPer) S.rankPer="geral";
-  var per=(S.rankPer==="mes")?mesAtual():"geral";
+  var per=S.rankPer==="mes"?mesAtual():S.rankPer;
   var all=dbAllPlayers(), jog=[]; for(var i=0;i<all.length;i++){ if(all[i].status==="aprovado") jog.push(all[i]); }
   var ranked=jog.slice().sort(function(a,b){ var na=notaPer(a,per), nb=notaPer(b,per), ra=(na.base==="jogos"), rb=(nb.base==="jogos"); if(ra&&rb) return nb.value-na.value; if(ra!==rb) return ra?-1:1; return (a.apelido||a.nome||"").localeCompare(b.apelido||b.nome||""); });
   var h=['<div class="panel"><div class="eyebrow">Nota da firma</div><h2 class="ph">Ranking</h2>'];
-  h.push('<div class="seg" style="margin-top:12px"><button data-action="rank-per" data-p="mes" class="'+(S.rankPer==="mes"?"on":"")+'">Este mês</button><button data-action="rank-per" data-p="geral" class="'+(S.rankPer==="geral"?"on":"")+'">Geral</button></div>');
-  h.push('<div class="muted" style="margin-bottom:8px">'+(S.rankPer==="mes"?("Média das notas de "+esc(mesLabel(mesAtual()))+". Quem não jogou no mês aparece sem nota."):"Média das notas semanais + a nota geral (base). Quem ainda não tem nota aparece com a autoavaliação.")+'</div>');
+  var _rm=mesesDisponiveis();
+  h.push('<div class="field" style="margin-top:12px;margin-bottom:6px"><label for="rank_per">Período</label><select id="rank_per" class="selin" data-change="rank-per-sel"><option value="geral"'+(per==="geral"?" selected":"")+'>Geral</option>');
+  for(var rmi=0;rmi<_rm.length;rmi++) h.push('<option value="'+_rm[rmi]+'"'+(per===_rm[rmi]?" selected":"")+'>'+esc(mesLabel(_rm[rmi]))+'</option>');
+  h.push('</select></div>');
+  h.push('<div class="muted" style="margin-bottom:8px">'+(per==="geral"?"Média das notas semanais + a nota geral (base). Quem ainda não tem nota aparece com a autoavaliação.":("Média das notas de "+esc(mesLabel(per))+". Quem não jogou no mês aparece sem nota."))+'</div>');
   for(var r=0;r<ranked.length;r++){ var p=ranked[r], ni=notaPer(p,per);
     h.push('<div class="prow"><div style="width:20px;text-align:center;font-family:Archivo,sans-serif;font-weight:900;color:var(--ink-soft)">'+(r+1)+'</div>'+avatarTag(p,"pav"));
     h.push('<div class="pinfo"><div class="pname">'+nomeExib(p)+'</div><div class="pmeta">'+posPairBadges(p)+' '+(ni.base==="jogos"?'<span class="muted" style="font-size:11.5px">'+ni.n+' jogo'+(ni.n===1?'':'s')+(ni.baseIncl?' + base':'')+'</span>':'<span class="muted" style="font-size:11.5px">sem nota ainda</span>')+'</div></div>');
@@ -1447,6 +1457,7 @@ document.addEventListener("click", function(ev){
   if(act==="celeb-close"){ if(el.classList&&el.classList.contains("overlay")&&ev.target!==el) return; var ck=el.getAttribute("data-k"); var mu=me(); if(mu&&ck&&mu.honraVistaJogo!==ck) dbUpdate(mu.id,{honraVistaJogo:ck}); S._celebOpen=false; closeModal(); return; }
   if(act==="celeb-share"){ gerarHonraImagem(el.getAttribute("data-k")); return; }
   if(act==="celeb-open"){ celebracaoModal(el.getAttribute("data-k")); return; }
+  if(act==="del-jogo"){ if(!amMaster())return; var dk=el.getAttribute("data-k"); confirmModal("Excluir jogo","Excluir o jogo de "+jogoLabel(dk)+"? Isso apaga presenças, gols, assistências, notas e prêmios dessa rodada. Não dá pra desfazer.",function(){ delGame(dk); closeModal(); toast("Jogo excluído"); render(); },true); return; }
   if(act==="vote-call-go"){ var vk=el.getAttribute("data-k"); var muv=me(); if(muv&&muv.voteCallVista!==vk) dbUpdate(muv.id,{voteCallVista:vk}); S._celebOpen=false; S.appTab="inicio"; S.avaliarJogo=vk; closeModal(); window.scrollTo(0,0); render(); return; }
   if(act==="vote-call-close"){ if(el.classList&&el.classList.contains("overlay")&&ev.target!==el) return; var vk2=el.getAttribute("data-k"); var muc=me(); if(muc&&vk2&&muc.voteCallVista!==vk2) dbUpdate(muc.id,{voteCallVista:vk2}); S._celebOpen=false; closeModal(); return; }
   if(act==="save-cadastro"){ saveCadastro(); return; }
@@ -1538,6 +1549,8 @@ document.addEventListener("change", function(ev){
   if(act==="area-select"||act==="supt-select"){ syncActiveForm(); var tg=formTarget(); var kind=act==="area-select"?"area":"supt"; var v=t.value; if(v==="__new__"){ tg[kind+"New"]=true; tg[kind]=""; } else { tg[kind+"New"]=false; tg[kind]=v; } render(); return; }
   var chg=t.getAttribute("data-change");
   if(chg==="stat-per"){ S.statPer=t.value; render(); return; }
+  if(chg==="rank-per-sel"){ S.rankPer=t.value; render(); return; }
+  if(chg==="honra-pick"){ if(t.value) celebracaoModal(t.value); return; }
 });
 document.addEventListener("keydown", function(ev){ if(ev.key!=="Enter") return; if(S.view==="auth"){ if(S.googleNew) return; if(S.forgot) doForgot(); else if(S.authTab==="login") doLogin(); } });
 
