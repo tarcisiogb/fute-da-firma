@@ -263,7 +263,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24j · excluir jogo + ranking mês + honra por dia";
+var BUILD = "2026-08-24k · fechamento configurável";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -309,7 +309,7 @@ var demoPlayers = [
   { id:"u_andre", provider:"senha", email:"andre@fute", senha:"123456", nome:"André Lima", apelido:"Dedé", telefone:"(11) 90000-0006", foto:null, posPrincipal:"zaga", posSecundaria:"meio", area:"Cartões", supt:"Rafa Tavolaro", role:"jogador", status:"pendente", mensalista:false, ativo:true, autoavaliacao:3 },
   { id:"u_marcelo", provider:"senha", email:"marcelo@fute", senha:"123456", nome:"Marcelo Souza", apelido:"Celo", telefone:"(11) 90000-0007", foto:null, posPrincipal:"ataque", posSecundaria:null, area:"Outras", supt:"Outro", role:"jogador", status:"pendente", mensalista:false, ativo:true, autoavaliacao:4 }
 ];
-var demoConfig = { valorMensalidade:50, chavePix:"fute@firma.com.br", diaJogo:4, horaJogo:"19:30", localJogo:"Quadra da firma" };
+var demoConfig = { valorMensalidade:50, chavePix:"fute@firma.com.br", diaJogo:4, horaJogo:"19:30", localJogo:"Quadra da firma", fechaDia:6, fechaHora:"23:59" };
 var demoMensalidades = {}; // "uid|YYYY-MM" -> {pago,data,valor}
 var demoDespesas = [];     // {id,mesKey,dataBR,categoria,valor,descricao}
 var demoJogos = {};        // "YYYY-MM-DD" -> {confirm:{uid:'sim'|'nao'}, presenca:{uid:true|false}, avulsos:[...], encerrado}
@@ -353,8 +353,9 @@ function jogoMesKey(k){ return k.slice(0,7); }
 function shiftJogo(k,weeks){ var d=parseYMD(k); d.setDate(d.getDate()+weeks*7); return ymd(d); }
 function jogoCloseTime(k){ var d=parseYMD(k); return new Date(d.getFullYear(),d.getMonth(),d.getDate()+1,9,0,0,0); }
 function jogoFechado(k){ return new Date().getTime()>=jogoCloseTime(k).getTime(); }
-function confirmAberta(k){ var d=parseYMD(k), lim=new Date(d.getFullYear(),d.getMonth(),d.getDate()-1); return new Date().getTime() < lim.getTime(); }
-function confirmLimLabel(k){ var d=parseYMD(k), dd=new Date(d.getFullYear(),d.getMonth(),d.getDate()-2); return WEEKDAYS[dd.getDay()]+" "+pad2(dd.getDate())+"/"+pad2(dd.getMonth()+1)+", 23:59"; }
+function fechaConfirmDate(k){ var cfg=dbConfig(), fd=(cfg.fechaDia==null?6:cfg.fechaDia), ft=cfg.fechaHora||"23:59", d=parseYMD(k), back=1; while(back<=7){ var c=new Date(d.getFullYear(),d.getMonth(),d.getDate()-back); if(c.getDay()===fd) break; back++; } var cand=new Date(d.getFullYear(),d.getMonth(),d.getDate()-back), hm=(""+ft).split(":"); cand.setHours(parseInt(hm[0],10)||0, parseInt(hm[1],10)||0, 0, 0); return cand; }
+function confirmAberta(k){ return new Date().getTime() < fechaConfirmDate(k).getTime(); }
+function confirmLimLabel(k){ var c=fechaConfirmDate(k); return WEEKDAYS[c.getDay()]+" "+pad2(c.getDate())+"/"+pad2(c.getMonth()+1)+", "+(dbConfig().fechaHora||"23:59"); }
 function porApelido(a,b){ return (a.apelido||a.nome||"").localeCompare(b.apelido||b.nome||"","pt",{sensitivity:"base"}); }
 function jogoTravado(k){ var j=demoJogos[k]||{}; if(j.travado===true) return true; if(j.travado===false) return false; return jogoFechado(k); }
 function jogoSetTravado(k,val){ var j=dbJogo(k); j.travado=val; if(FB) db.collection("jogos").doc(k).set({travado:val},{merge:true}).catch(fbCatch()); }
@@ -1146,6 +1147,10 @@ function renderJogos(){
   for(var d=0;d<7;d++) h.push('<option value="'+d+'"'+(cfg.diaJogo===d?" selected":"")+'>'+WEEKDAYS[d]+'</option>');
   h.push('</select></div><div class="field"><label for="jc_hora">Horário</label><input id="jc_hora" type="text" value="'+esc(cfg.horaJogo||"")+'" placeholder="19:30"></div></div>');
   h.push('<div class="field"><label for="jc_local">Local</label><input id="jc_local" type="text" value="'+esc(cfg.localJogo||"")+'"></div>');
+  h.push('<div class="grid2"><div class="field"><label for="jc_fdia">Fecha confirmação em</label><select id="jc_fdia" class="selin">');
+  for(var fdd=0;fdd<7;fdd++) h.push('<option value="'+fdd+'"'+(((cfg.fechaDia==null?6:cfg.fechaDia)===fdd)?" selected":"")+'>'+WEEKDAYS[fdd]+'</option>');
+  h.push('</select></div><div class="field"><label for="jc_fhora">Hora do fechamento</label><input id="jc_fhora" type="text" value="'+esc(cfg.fechaHora||"23:59")+'" placeholder="23:59"></div></div>');
+  h.push('<div class="muted" style="font-size:11.5px;margin-top:-2px;margin-bottom:8px">A confirmação (Vou/Não vou) fecha nesse dia/hora da semana do jogo. Depois disso, só o Adm confirma alguém.</div>');
   h.push('<button class="btn ghost small" data-action="save-jogo-cfg">Salvar</button></div>');
 
   h.push('<div class="panel"><div class="mesnav"><button class="btn mini ghost" data-action="jogo-prev" aria-label="Semana anterior">‹</button><div class="meslbl" style="text-transform:capitalize">'+esc(jogoLabel(k))+(isProx?' <span class="badge mens" style="vertical-align:middle;text-transform:none">próximo</span>':'')+'</div><button class="btn mini ghost" data-action="jogo-next" aria-label="Próxima semana">›</button></div>');
@@ -1481,7 +1486,7 @@ document.addEventListener("click", function(ev){
   // Jogos / presença / avulsos
   if(act==="confirm-sim"){ var u=me(), k=proximoJogoKey(); if(!confirmAberta(k)){ toast("Confirmação encerrada — fale com um Adm"); return; } var jp=dbJogoPeek(k), cur=jp?jp.confirm[u.id]:null; setConfirm(u.id,k, cur==="sim"?null:"sim"); toast(cur==="sim"?"Confirmação removida":"Presença confirmada"); render(); return; }
   if(act==="confirm-nao"){ var u2=me(), k2=proximoJogoKey(); if(!confirmAberta(k2)){ toast("Confirmação encerrada — fale com um Adm"); return; } var jp2=dbJogoPeek(k2), cur2=jp2?jp2.confirm[u2.id]:null; setConfirm(u2.id,k2, cur2==="nao"?null:"nao"); toast(cur2==="nao"?"Resposta removida":"Marcado que não vai"); render(); return; }
-  if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim() }); S.jogoManual=false; S.jogoSel=proximoJogoKey(); toast("Dia do jogo salvo"); render(); return; }
+  if(act==="save-jogo-cfg"){ dbSetConfig({ diaJogo:parseInt(val("jc_dia"),10), horaJogo:val("jc_hora").trim(), localJogo:val("jc_local").trim(), fechaDia:parseInt(val("jc_fdia"),10), fechaHora:val("jc_fhora").trim()||"23:59" }); S.jogoManual=false; S.jogoSel=proximoJogoKey(); toast("Configuração salva"); render(); return; }
   if(act==="jogo-prev"){ S.jogoManual=true; S.jogoSel=shiftJogo(S.jogoSel||proximoJogoKey(),-1); S.sorteio=null; render(); return; }
   if(act==="jogo-next"){ S.jogoManual=true; S.jogoSel=shiftJogo(S.jogoSel||proximoJogoKey(),1); S.sorteio=null; render(); return; }
   if(act==="add-gk-avulso"){ if(!amAdm())return; if(edicaoBloqueada(S.jogoSel))return; var nm=(val("gk_novo")||"").trim(); if(!nm){ toast("Digite o nome do goleiro"); return; } addAvulsoToJogo(S.jogoSel,{nome:nm,posPrincipal:"goleiro",posSecundaria:null,nota:3,pago:false}); toast("Goleiro convidado adicionado"); render(); return; }
