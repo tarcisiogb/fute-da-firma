@@ -263,7 +263,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24k · fechamento configurável";
+var BUILD = "2026-08-24m · fechamento destacado";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -888,7 +888,7 @@ function renderAdmin(){
 function renderTesouraria(){
   var cfg=dbConfig(); if(!S.tesMes) S.tesMes=todayKey(); var mes=S.tesMes;
   var cx=caixaTotais(), mt=mesTotais(mes);
-  var all=dbAllPlayers(), mensalistas=[], isentos=0; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.status!=="aprovado") continue; if(p.mensalista && p.isento) isentos++; else if(p.mensalista) mensalistas.push(p); }
+  var all=dbAllPlayers(), mensalistas=[], isentos=0; for(var i=0;i<all.length;i++){ var p=all[i]; if(p.status!=="aprovado") continue; if(p.mensalista && p.isento) isentos++; else if(p.mensalista) mensalistas.push(p); } mensalistas.sort(porApelido);
   var pagos=0; for(var j=0;j<mensalistas.length;j++){ var mn=dbMens(mensalistas[j].id,mes); if(mn&&mn.pago) pagos++; }
   var valor=cfg.valorMensalidade||0;
   var h=[];
@@ -1147,6 +1147,7 @@ function renderJogos(){
   for(var d=0;d<7;d++) h.push('<option value="'+d+'"'+(cfg.diaJogo===d?" selected":"")+'>'+WEEKDAYS[d]+'</option>');
   h.push('</select></div><div class="field"><label for="jc_hora">Horário</label><input id="jc_hora" type="text" value="'+esc(cfg.horaJogo||"")+'" placeholder="19:30"></div></div>');
   h.push('<div class="field"><label for="jc_local">Local</label><input id="jc_local" type="text" value="'+esc(cfg.localJogo||"")+'"></div>');
+  h.push('<div class="divider"></div><div class="subhead">Fechamento da confirmação</div>');
   h.push('<div class="grid2"><div class="field"><label for="jc_fdia">Fecha confirmação em</label><select id="jc_fdia" class="selin">');
   for(var fdd=0;fdd<7;fdd++) h.push('<option value="'+fdd+'"'+(((cfg.fechaDia==null?6:cfg.fechaDia)===fdd)?" selected":"")+'>'+WEEKDAYS[fdd]+'</option>');
   h.push('</select></div><div class="field"><label for="jc_fhora">Hora do fechamento</label><input id="jc_fhora" type="text" value="'+esc(cfg.fechaHora||"23:59")+'" placeholder="23:59"></div></div>');
