@@ -198,6 +198,8 @@ h2.ph{font-family:'Archivo',sans-serif;font-weight:800;font-size:21px;margin-bot
 .cmt{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
 .cmthead{font-size:13px;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .cmtbody{font-size:13.5px;margin-top:5px;line-height:1.4;white-space:pre-wrap}
+.cmtav{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--grass-soft);color:var(--grass-deep);font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cmtav img{width:100%;height:100%;object-fit:cover;display:block}
 .cmtacts{display:flex;gap:12px;margin-top:8px}
 .modal h3{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;margin-bottom:8px}
 .modal p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-bottom:18px}
@@ -263,7 +265,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24n · tela de carregando";
+var BUILD = "2026-08-24o · aba Feed";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -765,6 +767,7 @@ function renderTabs(){
   var h=['<nav class="tabs">'];
   var uMe=me(), nNov=(uMe?novosComentarios(uMe.id).length:0);
   h.push('<button data-action="app-tab" data-tab="inicio" class="'+(S.appTab==="inicio"?"on":"")+'">Início'+(nNov?' <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#c0392b;vertical-align:middle"></span>':'')+'</button>');
+  h.push('<button data-action="app-tab" data-tab="feed" class="'+(S.appTab==="feed"?"on":"")+'">Feed</button>');
   h.push('<button data-action="app-tab" data-tab="cadastro" class="'+(S.appTab==="cadastro"?"on":"")+'">Meu cadastro</button>');
   h.push('<button data-action="app-tab" data-tab="ranking" class="'+(S.appTab==="ranking"?"on":"")+'">Ranking</button>');
   h.push('<button data-action="app-tab" data-tab="stats" class="'+(S.appTab==="stats"?"on":"")+'">Estatísticas</button>');
@@ -1213,10 +1216,26 @@ function renderJogos(){
   h.push('</div>');
   return h.join("");
 }
+function renderFeed(){
+  var arr=[],kk; for(kk in demoComentarios){ var pp=kk.split("|"); arr.push({k:pp[0],autor:pp[1],alvo:pp[2],texto:demoComentarios[kk]}); }
+  arr.sort(function(a,b){ var ta=comentTime(a.k,a.autor,a.alvo)||comentDataMs(a), tb=comentTime(b.k,b.autor,b.alvo)||comentDataMs(b); return tb-ta; });
+  var meU=me(), amAdmV=amAdm();
+  var h=['<div class="panel"><div class="eyebrow">Comentários</div><h2 class="ph">Feed</h2>'];
+  if(!arr.length){ h.push('<div class="emptymsg">Ainda não há comentários. Deixe um recado no mural de um colega (no perfil dele) ou na janela de votação.</div></div>'); return h.join(""); }
+  h.push('<div class="muted" style="margin-bottom:12px">Os recados da galera, mais recentes primeiro.</div>');
+  for(var i=0;i<arr.length;i++){ var cm=arr[i], alvoP=dbGet(cm.alvo);
+    h.push('<div class="cmt"><div class="cmthead">'+(alvoP?avatarTag(alvoP,"cmtav"):'')+'<div><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">para <b>'+esc(nomeQualquer(cm.alvo))+'</b></span><div class="muted" style="font-size:11px">'+esc(comentLabel(cm))+'</div></div></div>');
+    h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
+    if((meU && cm.autor===meU.id) || amAdmV){ h.push('<div class="cmtacts">'+((meU && cm.autor===meU.id)?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+cm.alvo+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+cm.alvo+'">apagar</span></div>'); }
+    h.push('</div>');
+  }
+  h.push('</div>'); return h.join("");
+}
 function renderApp(){
   var u=me(); if(!u){ S.view="auth"; return renderAuth(); }
   var h=['<div class="wrap">']; h.push(renderHeader(u)); h.push(renderTabs());
   if(S.avaliarJogo) h.push(renderAvaliar());
+  else if(S.appTab==="feed") h.push(renderFeed());
   else if(S.appTab==="cadastro") h.push(renderCadastro(u));
   else if(S.appTab==="ranking") h.push(renderRanking());
   else if(S.appTab==="stats") h.push(renderEstatisticas());
