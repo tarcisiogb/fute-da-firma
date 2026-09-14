@@ -200,6 +200,10 @@ h2.ph{font-family:'Archivo',sans-serif;font-weight:800;font-size:21px;margin-bot
 .cmtbody{font-size:13.5px;margin-top:5px;line-height:1.4;white-space:pre-wrap}
 .cmtav{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--grass-soft);color:var(--grass-deep);font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .cmtav img{width:100%;height:100%;object-fit:cover;display:block}
+.feedday{font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;letter-spacing:.04em;text-transform:uppercase;color:var(--grass-deep);background:var(--grass-soft);display:inline-block;padding:5px 12px;border-radius:999px;margin:16px 0 10px}
+.feedday:first-child{margin-top:0}
+.cmtpair{display:flex;align-items:center;gap:4px;flex:0 0 auto;margin-right:2px}
+.cmtarrow{color:var(--ink-soft);font-size:13px}
 .cmtacts{display:flex;gap:12px;margin-top:8px}
 .modal h3{font-family:'Archivo',sans-serif;font-weight:800;font-size:19px;margin-bottom:8px}
 .modal p{font-size:14px;color:var(--ink-soft);line-height:1.5;margin-bottom:18px}
@@ -265,7 +269,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24o · aba Feed";
+var BUILD = "2026-08-24p · feed agrupado por dia";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -1216,19 +1220,30 @@ function renderJogos(){
   h.push('</div>');
   return h.join("");
 }
+function feedDiaLabel(ms){ var d=new Date(ms), hoje=new Date(), on=ymd(d)===ymd(hoje), y=new Date(hoje); y.setDate(y.getDate()-1);
+  if(on) return "Hoje";
+  if(ymd(d)===ymd(y)) return "Ontem";
+  return WEEKDAYS[d.getDay()]+", "+pad2(d.getDate())+"/"+pad2(d.getMonth()+1);
+}
 function renderFeed(){
   var arr=[],kk; for(kk in demoComentarios){ var pp=kk.split("|"); arr.push({k:pp[0],autor:pp[1],alvo:pp[2],texto:demoComentarios[kk]}); }
-  arr.sort(function(a,b){ var ta=comentTime(a.k,a.autor,a.alvo)||comentDataMs(a), tb=comentTime(b.k,b.autor,b.alvo)||comentDataMs(b); return tb-ta; });
   var meU=me(), amAdmV=amAdm();
   var h=['<div class="panel"><div class="eyebrow">Comentários</div><h2 class="ph">Feed</h2>'];
   if(!arr.length){ h.push('<div class="emptymsg">Ainda não há comentários. Deixe um recado no mural de um colega (no perfil dele) ou na janela de votação.</div></div>'); return h.join(""); }
-  h.push('<div class="muted" style="margin-bottom:12px">Os recados da galera, mais recentes primeiro.</div>');
-  for(var i=0;i<arr.length;i++){ var cm=arr[i], alvoP=dbGet(cm.alvo);
-    h.push('<div class="cmt"><div class="cmthead">'+(alvoP?avatarTag(alvoP,"cmtav"):'')+'<div><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">para <b>'+esc(nomeQualquer(cm.alvo))+'</b></span><div class="muted" style="font-size:11px">'+esc(comentLabel(cm))+'</div></div></div>');
-    h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
-    if((meU && cm.autor===meU.id) || amAdmV){ h.push('<div class="cmtacts">'+((meU && cm.autor===meU.id)?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+cm.alvo+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+cm.alvo+'">apagar</span></div>'); }
-    h.push('</div>');
-  }
+  h.push('<div class="muted" style="margin-bottom:14px">Os recados da galera, mais recentes primeiro.</div>');
+  arr.forEach(function(c){ c.ms=comentTime(c.k,c.autor,c.alvo)||comentDataMs(c); });
+  arr.sort(function(a,b){ return b.ms-a.ms; });
+  var groups=[], byDay={};
+  arr.forEach(function(c){ var dk=ymd(new Date(c.ms)); if(!byDay[dk]){ byDay[dk]={label:feedDiaLabel(c.ms),items:[]}; groups.push(byDay[dk]); } byDay[dk].items.push(c); });
+  groups.forEach(function(g){
+    h.push('<div class="feedday">'+esc(g.label)+'</div>');
+    g.items.forEach(function(cm){ var autorP=dbGet(cm.autor), alvoP=dbGet(cm.alvo);
+      h.push('<div class="cmt"><div class="cmthead"><div class="cmtpair">'+avatarTag(autorP,"cmtav")+'<span class="cmtarrow">→</span>'+(alvoP?avatarTag(alvoP,"cmtav"):'<div class="cmtav">'+esc(initials(nomeQualquer(cm.alvo)))+'</div>')+'</div><div><b>'+esc(nomeCurto(cm.autor))+'</b> <span class="muted" style="font-size:11px">para <b>'+esc(nomeQualquer(cm.alvo))+'</b></span><div class="muted" style="font-size:11px">'+esc(comentLabel(cm))+'</div></div></div>');
+      h.push('<div class="cmtbody">'+esc(cm.texto)+'</div>');
+      if((meU && cm.autor===meU.id) || amAdmV){ h.push('<div class="cmtacts">'+((meU && cm.autor===meU.id)?'<span class="cmtlink" data-action="cmt-open" data-k="'+cm.k+'" data-alvo="'+cm.alvo+'">editar</span>':'')+'<span class="cmtlink" data-action="cmt-del" data-k="'+cm.k+'" data-autor="'+cm.autor+'" data-alvo="'+cm.alvo+'">apagar</span></div>'); }
+      h.push('</div>');
+    });
+  });
   h.push('</div>'); return h.join("");
 }
 function renderApp(){
