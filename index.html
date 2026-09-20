@@ -269,7 +269,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24p · feed agrupado por dia";
+var BUILD = "2026-08-24r · não vai (Adm) + totalizador c/ avulsos";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -1167,7 +1167,7 @@ function renderJogos(){
   h.push('<div class="subhead" style="margin-top:6px">Mensalistas — presença</div>');
   for(var m=0;m<mens.length;m++){ var q=mens[m], cc=j.confirm[q.id], pr=j.presenca[q.id];
     var chip=cc==="sim"?'<span class="badge mens">Confirmou</span>':cc==="nao"?'<span class="badge inativo">Não vai</span>':'<span class="badge semcob">Sem resposta</span>';
-    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+chip+' '+posPairBadges(q)+(amAdm()&&!jogoFechado(k)?' <span class="badge" style="cursor:pointer;background:'+(cc==="sim"?"#e9f3ec":"#eef2ff")+';color:'+(cc==="sim"?"#166534":"#3457a6")+'" data-action="adm-confirm" data-id="'+q.id+'" data-v="'+(cc==="sim"?"":"sim")+'">'+(cc==="sim"?"desmarcar":"confirmar (Adm)")+'</span>':'')+'</div></div>');
+    h.push('<div class="prow">'+avatarTag(q,"pav")+'<div class="pinfo"><div class="pname">'+nomeExib(q)+'</div><div class="pmeta">'+chip+' '+posPairBadges(q)+(amAdm()&&!jogoFechado(k)?' <span class="badge" style="cursor:pointer;background:'+(cc==="sim"?"#e9f3ec":"#f1f4f2")+';color:'+(cc==="sim"?"#166534":"#5c6b62")+'" data-action="adm-confirm" data-id="'+q.id+'" data-v="sim">Confirmar</span> <span class="badge" style="cursor:pointer;background:'+(cc==="nao"?"#fdecea":"#f1f4f2")+';color:'+(cc==="nao"?"#c0392b":"#5c6b62")+'" data-action="adm-confirm" data-id="'+q.id+'" data-v="nao">Não vai</span>':'')+'</div></div>');
     h.push('<div class="pacts">'+(trav?((pr===true?'<span class="badge ok">Presente</span>':pr===false?'<span class="badge danger">Faltou</span>':'<span class="muted" style="font-size:12px">—</span>')+(pr===true?statStatic(k,q.id):'')):('<button class="btn mini '+(pr===true?"ok":"ghost")+'" data-action="pres-on" data-id="'+q.id+'">Presente</button><button class="btn mini '+(pr===false?"danger":"ghost")+'" data-action="pres-off" data-id="'+q.id+'">Faltou</button>'+(pr===true?statStepper(k,q.id):'')))+'</div></div>');
   }
   if(mens.length===0) h.push('<div class="emptymsg">Nenhum mensalista ativo.</div>');
@@ -1199,6 +1199,11 @@ function renderJogos(){
   var pool=poolFor(k);
   h.push('<div class="panel"><div class="eyebrow">Times</div><h2 class="ph">Sorteio</h2>');
   h.push('<div class="muted" style="margin-top:4px;margin-bottom:10px">Os <b>presentes</b> começam jogando (Times 1 e 2). Quem <b>confirmou mas ainda não chegou</b> ("a caminho") entra pra compor <b>do 3º time em diante</b>, equilibrando as médias — com 2 times, esses ficam de fora. Quem marcou <b>Faltou</b> ou não confirmou não entra.</div>');
+  var pPres=0,pCam=0,pAv=0; for(var pi=0;pi<pool.length;pi++){ var pp=pool[pi]; if(pp.isAvulso) pAv++; else if(pp.absent) pCam++; else pPres++; }
+  var pPresTotal=pPres+pAv;
+  h.push('<div class="tsummary" style="margin-bottom:6px"><div class="tsum"><div class="k">Confirmados</div><div class="v">'+pool.length+'</div></div><div class="tsum"><div class="k">Presentes</div><div class="v">'+pPresTotal+'</div></div><div class="tsum"><div class="k">A caminho</div><div class="v">'+pCam+'</div></div></div>');
+  if(pAv>0) h.push('<div class="muted" style="font-size:11.5px;margin-bottom:14px">Presentes inclui '+pAv+' avulso'+(pAv===1?'':'s')+'. Confirmados = presentes + a caminho.</div>');
+  else h.push('<div style="margin-bottom:14px"></div>');
   h.push('<div class="grid2"><div class="field"><label for="so_n">Nº de times</label><select id="so_n" class="selin">');
   for(var nt=2;nt<=4;nt++) h.push('<option value="'+nt+'">'+nt+' times</option>');
   h.push('</select></div><div class="field"><label for="so_size">Jogadores por time</label><select id="so_size" class="selin"><option value="0">Automático</option>');
@@ -1558,7 +1563,7 @@ document.addEventListener("click", function(ev){
   if(act==="pres-on"){ if(edicaoBloqueada(S.jogoSel))return; var jo=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jo.presenca[id]===true?null:true); render(); return; }
   if(act==="pres-off"){ if(edicaoBloqueada(S.jogoSel))return; var jf=dbJogo(S.jogoSel); setPresenca(id,S.jogoSel, jf.presenca[id]===false?null:false); render(); return; }
   if(act==="toggle-travar"){ if(!amMaster())return; var tk=el.getAttribute("data-k"); jogoSetTravado(tk, jogoTravado(tk)?false:true); toast(jogoTravado(tk)?"Jogo travado":"Jogo reaberto"); render(); return; }
-  if(act==="adm-confirm"){ if(!amAdm())return; var v=el.getAttribute("data-v"); setConfirm(id,S.jogoSel, v==="sim"?"sim":null); toast(v==="sim"?"Confirmado pelo Adm":"Confirmação removida"); render(); return; }
+  if(act==="adm-confirm"){ if(!amAdm())return; var v=el.getAttribute("data-v"), jj=dbJogo(S.jogoSel), curV=jj.confirm[id], novo=(curV===v)?null:v; setConfirm(id,S.jogoSel,novo); toast(novo==="sim"?"Confirmado pelo Adm":novo==="nao"?"Marcado que não vai (Adm)":"Resposta removida"); render(); return; }
   if(act==="av-lista-del"){ var nm=el.getAttribute("data-nome")||"este convidado"; confirmModal("Remover convidado","Tirar \""+nm+"\" da lista de reaproveitar? (não afeta jogos já lançados)",function(){ for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id){ demoAvulsos.splice(ai,1); break; } } if(FB) db.collection("avulsos").doc(id).delete().catch(fbCatch()); closeModal(); toast("Convidado removido da lista"); render(); },true); return; }
   if(act==="av-fill"){ var da=null; for(var ai=0;ai<demoAvulsos.length;ai++){ if(demoAvulsos[ai].id===id) da=demoAvulsos[ai]; } if(da){ var gg=function(x){return document.getElementById(x);}; if(gg("av_nome"))gg("av_nome").value=da.nome; if(gg("av_princ"))gg("av_princ").value=da.posPrincipal; if(gg("av_sec"))gg("av_sec").value=da.posSecundaria||""; if(gg("av_nota"))gg("av_nota").value=String(da.nota||3); if(gg("av_valor"))gg("av_valor").focus(); } return; }
   if(act==="add-avulso"){ var anome=val("av_nome").trim(); if(!anome){ toast("Informe o nome"); return; } var ao={nome:anome,posPrincipal:val("av_princ"),posSecundaria:val("av_sec")||null,nota:parseInt(val("av_nota"),10)||3,valor:parseBRNum(val("av_valor")),pago:(document.getElementById("av_pago")||{}).checked||false}; addAvulsoToJogo(S.jogoSel,ao); dbAddAvulsoLista({nome:ao.nome,posPrincipal:ao.posPrincipal,posSecundaria:ao.posSecundaria,nota:ao.nota}); toast("Avulso adicionado"); render(); return; }
