@@ -269,7 +269,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-08-24r · não vai (Adm) + totalizador c/ avulsos";
+var BUILD = "2026-08-24s · erros honestos (login/google/senha)";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -587,11 +587,11 @@ function authLogin(email, senha){
     if(p.senha!==senha) return {erro:"Senha incorreta."};
     return {player:p};
   }
-  return {erro:"Firebase ainda não configurado."};
+  return {erro:"Não consegui falar com o servidor agora. Verifique sua conexão e recarregue a página."};
 }
 function novoBase(){ return { role:"jogador", status:"pendente", mensalista:false, isento:false, ativo:true, autoavaliacao:3, foto:null }; }
-function authRegister(d){ if(DEMO){ if(dbEmailExists(d.email)) return {erro:"Já existe um cadastro com esse e-mail."}; var n=novoBase(); n.id="u_"+Date.now(); n.provider="senha"; n.email=d.email.trim(); n.senha=d.senha; n.nome=d.nome.trim(); n.apelido=d.apelido.trim(); n.telefone=(d.tel||"").trim(); n.posPrincipal=d.princ; n.posSecundaria=d.sec||null; n.area=d.area; n.supt=d.supt; demoPlayers.push(n); return {player:n}; } return {erro:"Firebase ainda não configurado."}; }
-function authRegisterGoogle(d){ if(DEMO){ if(dbEmailExists(d.email)) return {erro:"Essa conta Google já tem cadastro."}; var n=novoBase(); n.id="u_"+Date.now(); n.provider="google"; n.email=d.email.trim(); n.senha=null; n.nome=d.nome.trim(); n.apelido=d.apelido.trim(); n.telefone=(d.tel||"").trim(); n.foto=d.foto||null; n.posPrincipal=d.princ; n.posSecundaria=d.sec||null; n.area=d.area; n.supt=d.supt; demoPlayers.push(n); return {player:n}; } return {erro:"Firebase ainda não configurado."}; }
+function authRegister(d){ if(DEMO){ if(dbEmailExists(d.email)) return {erro:"Já existe um cadastro com esse e-mail."}; var n=novoBase(); n.id="u_"+Date.now(); n.provider="senha"; n.email=d.email.trim(); n.senha=d.senha; n.nome=d.nome.trim(); n.apelido=d.apelido.trim(); n.telefone=(d.tel||"").trim(); n.posPrincipal=d.princ; n.posSecundaria=d.sec||null; n.area=d.area; n.supt=d.supt; demoPlayers.push(n); return {player:n}; } return {erro:"Não consegui falar com o servidor agora. Verifique sua conexão e recarregue a página."}; }
+function authRegisterGoogle(d){ if(DEMO){ if(dbEmailExists(d.email)) return {erro:"Essa conta Google já tem cadastro."}; var n=novoBase(); n.id="u_"+Date.now(); n.provider="google"; n.email=d.email.trim(); n.senha=null; n.nome=d.nome.trim(); n.apelido=d.apelido.trim(); n.telefone=(d.tel||"").trim(); n.foto=d.foto||null; n.posPrincipal=d.princ; n.posSecundaria=d.sec||null; n.area=d.area; n.supt=d.supt; demoPlayers.push(n); return {player:n}; } return {erro:"Não consegui falar com o servidor agora. Verifique sua conexão e recarregue a página."}; }
 
 /* ===================== FIREBASE (produção) =====================
    Espelha as coleções do Firestore nos mesmos caches usados pelo
@@ -1314,7 +1314,7 @@ function doGoogleComplete(){
   if(r.erro){ S.msg={tipo:"err",txt:r.erro}; render(); return; }
   S.form=null; S.googleNew=false; S.authTab="login"; S.msg={tipo:"ok",txt:"Cadastro enviado pelo Google! Assim que um administrador aprovar, é só entrar."}; render();
 }
-function doForgot(){ var email=val("fg_email").trim(); if(!email){ S.msg={tipo:"err",txt:"Informe seu e-mail."}; render(); return; } if(FB){ auth.sendPasswordResetEmail(email).then(function(){ S.msg={tipo:"ok",txt:"Enviamos um link de redefinição para "+email+". Confira seu e-mail."}; render(); }).catch(function(e){ S.msg={tipo:"err",txt:fbAuthErr(e)}; render(); }); return; } if(DEMO && !dbEmailExists(email)){ S.msg={tipo:"err",txt:"E-mail não encontrado."}; render(); return; } S.msg={tipo:"ok",txt:(DEMO?"(demo) ":"")+"Enviamos um link de redefinição para "+email+"."}; render(); }
+function doForgot(){ var email=val("fg_email").trim(); if(!email){ S.msg={tipo:"err",txt:"Informe seu e-mail."}; render(); return; } if(FB){ auth.sendPasswordResetEmail(email).then(function(){ S.msg={tipo:"ok",txt:"Enviamos um link de redefinição para "+email+". Confira seu e-mail."}; render(); }).catch(function(e){ S.msg={tipo:"err",txt:fbAuthErr(e)}; render(); }); return; } if(DEMO){ if(!dbEmailExists(email)){ S.msg={tipo:"err",txt:"E-mail não encontrado."}; render(); return; } S.msg={tipo:"ok",txt:"(demo) Enviamos um link de redefinição para "+email+"."}; render(); return; } S.msg={tipo:"err",txt:"Não consegui conectar agora. Verifique sua conexão e recarregue a página."}; render(); }
 function saveCadastro(){
   syncEditInputs(); var e=S.edit; var u=me(); var isGoogle=(u.provider==="google");
   if(!e.nome.trim()||!e.apelido.trim()){ S.msg={tipo:"err",txt:"Nome e apelido são obrigatórios."}; render(); return; }
@@ -1490,7 +1490,7 @@ document.addEventListener("click", function(ev){
   if(act==="do-forgot"){ doForgot(); return; }
   if(act==="do-login"){ doLogin(); return; }
   if(act==="do-signup"){ doSignup(); return; }
-  if(act==="google-open"){ if(FB){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){ S.msg={tipo:"err",txt:fbAuthErr(e)}; render(); }); return; } googleChooser(); return; }
+  if(act==="google-open"){ if(FB){ auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){ S.msg={tipo:"err",txt:fbAuthErr(e)}; render(); }); return; } if(DEMO){ googleChooser(); return; } S.msg={tipo:"err",txt:"Não consegui conectar ao Google agora. Verifique sua conexão e recarregue a página."}; render(); return; }
   if(act==="google-pick"){ var em=el.getAttribute("data-email"), nm=el.getAttribute("data-nome"); closeModal(); handleGoogle(em,nm); return; }
   if(act==="google-cancel"){ S.googleNew=false; S.form=null; S.msg=null; if(FB&&auth.currentUser) auth.signOut(); render(); return; }
   if(act==="do-google-complete"){ doGoogleComplete(); return; }
@@ -1584,7 +1584,7 @@ document.addEventListener("click", function(ev){
   if(act==="area-del"){ confirmModal("Excluir área","Remover esta área da lista?",function(){ dbDelItem(demoAreas,id); if(FB) db.collection("areas").doc(id).delete().catch(fbCatch()); closeModal(); toast("Área removida"); render(); },true); return; }
   if(act==="supt-del"){ confirmModal("Excluir supt","Remover este supt da lista?",function(){ dbDelItem(demoSupts,id); if(FB) db.collection("supts").doc(id).delete().catch(fbCatch()); closeModal(); toast("Supt removido"); render(); },true); return; }
 
-  if(act==="reset-link"){ var rp=dbGet(id); if(FB){ if(rp) auth.sendPasswordResetEmail(rp.email).then(function(){ toast("Link enviado para "+rp.email); }).catch(function(){ toast("Não consegui enviar o link"); }); return; } toast((DEMO?"(demo) ":"")+"Link de redefinição enviado para "+(rp?rp.email:"")); return; }
+  if(act==="reset-link"){ var rp=dbGet(id); if(FB){ if(rp) auth.sendPasswordResetEmail(rp.email).then(function(){ toast("Link enviado para "+rp.email); }).catch(function(){ toast("Não consegui enviar o link"); }); return; } if(DEMO){ toast("(demo) Link de redefinição enviado para "+(rp?rp.email:"")); return; } toast("Não consegui conectar agora. Recarregue a página e tente de novo."); return; }
   if(act==="copy-acesso"){ var cp=dbGet(id); if(navigator.clipboard) navigator.clipboard.writeText("Login: "+cp.email+"\nSenha: "+cp.senha); toast("Acesso copiado"); return; }
 
   if(act==="prompt-save"){ if(window.__promptSave){ var ipt=document.getElementById("promptInput"); window.__promptSave(ipt?ipt.value:""); } return; }
