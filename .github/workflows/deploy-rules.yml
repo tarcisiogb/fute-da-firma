@@ -33,21 +33,6 @@ jobs:
               print("::error title=Secret invalido::nao e um JSON valido (%s). Cole o conteudo INTEIRO do arquivo, de { ate }." % type(e).__name__)
               sys.exit(1)
           PY
-      - name: Diagnostico de permissoes
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
-        continue-on-error: true
-        run: |
-          gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" >/dev/null 2>&1
-          TOKEN=$(gcloud auth print-access-token 2>/dev/null)
-          R=$(curl -s -X POST "https://cloudresourcemanager.googleapis.com/v1/projects/fute-da-firma:testIamPermissions" \
-            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-            -d '{"permissions":["firebaserules.rulesets.test","firebaserules.rulesets.create","firebaserules.releases.update","firebaserules.releases.create","datastore.databases.getMetadata"]}')
-          echo "::notice title=Permissoes concedidas::$(echo "$R" | tr '\n' ' ' | cut -c1-600)"
-          R2=$(curl -s -X POST "https://firebaserules.googleapis.com/v1/projects/fute-da-firma:test" \
-            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-            -d '{"source":{"files":[{"name":"firestore.rules","content":"rules_version = \"2\"; service cloud.firestore { match /databases/{d}/documents { match /{x=**} { allow read: if false; } } }"}]}}')
-          echo "::notice title=Resposta da API de regras::$(echo "$R2" | tr '\n' ' ' | cut -c1-700)"
       - name: Publicar firestore.rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
