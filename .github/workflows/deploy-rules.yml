@@ -32,6 +32,6 @@ jobs:
           code=$?
           cat "$RUNNER_TEMP/deploy.log"
           if [ $code -ne 0 ]; then
-            echo "::error title=Falha ao publicar regras::$(grep -v '^$' "$RUNNER_TEMP/deploy.log" | tail -n 12 | tr '\n' ' ' | cut -c1-900)"
+            echo "::error title=Falha ao publicar regras::$(grep -v -e '^$' -e 'npm warn' "$RUNNER_TEMP/deploy.log" | tail -n 12 | tr '\n' ' ' | cut -c1-900)"
           fi
           exit $code
