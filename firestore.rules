@@ -1,0 +1,117 @@
+rules_version = '2';
+
+// =====================================================================
+// FUTE DA FIRMA — Regras do Firestore
+// jogadores (cadastro/aprovacao/perfis, e-mail-senha e Google),
+// config, mensalidades, despesas, areas, supts, jogos (presenca,
+// confirmacoes, gols, avulsos, notas semanais e premios).
+// =====================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function meDoc() { return get(/databases/$(database)/documents/jogadores/$(request.auth.uid)).data; }
+    function signedIn()  { return request.auth != null; }
+    function isApproved(){ return signedIn() && meDoc().status == 'aprovado'; }
+    function isMaster()  { return signedIn() && meDoc().role == 'master'; }
+    function isAdm()     { return signedIn() && (meDoc().role == 'adm' || meDoc().role == 'master'); }
+    // Capitao do jogo k: uid listado em jogos/{k}.capitaes (definido no sorteio).
+    function isCapitao(k) {
+      return isApproved()
+        && exists(/databases/$(database)/documents/jogos/$(k))
+        && get(/databases/$(database)/documents/jogos/$(k)).data.get('capitaes', {}).values().hasAny([request.auth.uid]);
+    }
+
+    match /jogadores/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isApproved());
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.status == 'pendente'
+        && request.resource.data.role == 'jogador'
+        && request.resource.data.mensalista == false;
+      // Proprio jogador: apelido, telefone, foto, posicoes, area, supt,
+      // autoavaliacao — sem tocar em role/status/mensalista/ativo.
+      allow update: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.mensalista == resource.data.mensalista
+        && request.resource.data.ativo == resource.data.ativo;
+      allow update: if isAdm() && request.resource.data.role == resource.data.role;
+      allow update, delete: if isMaster();
+    }
+
+    // Tesouraria
+    match /config/{doc}        { allow read: if isApproved(); allow write: if isAdm(); }
+    match /mensalidades/{docId}{ allow read: if isApproved(); allow write: if isAdm(); }
+    match /despesas/{docId}    { allow read: if isApproved(); allow write: if isAdm(); }
+
+    // Areas e supts — listas fixas do Master.
+    // Leitura PUBLICA (para preencher os dropdowns na tela de cadastro,
+    // antes do login). Qualquer autenticado pode SUGERIR uma nova
+    // (status pendente). So o Master aprova / edita / exclui.
+    match /areas/{id} {
+      allow read: if true;
+      allow create: if isMaster() || (signedIn() && request.resource.data.status == 'pendente');
+      allow update, delete: if isMaster();
+    }
+    match /supts/{id} {
+      allow read: if true;
+      allow create: if isMaster() || (signedIn() && request.resource.data.status == 'pendente');
+      allow update, delete: if isMaster();
+    }
+
+    // Jogos (pelada semanal). Adm cria o jogo, valida presenca e lanca
+    // avulsos. Cada jogador confirma a PROPRIA presenca na subcolecao.
+    match /jogos/{k} {
+      allow read: if isApproved();
+      allow write: if isAdm();
+      // Capitao do jogo pode lancar gols/assistencias (sumula) — e SO isso.
+      allow update: if isCapitao(k) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['gols','assist']);
+      // Trilha de auditoria: so cria (nunca edita/apaga); so Adm/Master le.
+      match /auditoria/{id} {
+        allow read: if isAdm();
+        allow create: if (isCapitao(k) || isAdm()) && request.resource.data.autor == request.auth.uid;
+        allow update, delete: if false;
+      }
+      match /confirmacoes/{uid} {
+        allow read: if isApproved();
+        allow write: if signedIn() && isApproved() && (request.auth.uid == uid || isAdm());
+      }
+      // Nota semanal: docId = {avaliadorUid}_{alvoUid}; cada um escreve so as proprias.
+      match /notas/{docId} {
+        allow read: if isApproved();
+        allow write: if isApproved() && docId.split('_')[0] == request.auth.uid;
+      }
+      // Votos de premios: um doc por votante.
+      match /premios/{uid} {
+        allow read: if isApproved();
+        allow write: if isApproved() && request.auth.uid == uid;
+      }
+      // Comentarios: docId = {autorUid}_{alvoUid}. Identificados.
+      // O autor cria/edita o seu; apaga o proprio ou o Adm apaga qualquer.
+      match /comentarios/{docId} {
+        allow read: if isApproved();
+        allow create, update: if isApproved() && request.resource.data.autor == request.auth.uid;
+        allow delete: if isApproved() && (resource.data.autor == request.auth.uid || isAdm());
+      }
+    }
+    // Necessario para as consultas collectionGroup.
+    match /{path=**}/confirmacoes/{uid} { allow read: if isApproved(); }
+    match /{path=**}/notas/{docId}      { allow read: if isApproved(); }
+    match /{path=**}/premios/{uid}      { allow read: if isApproved(); }
+    match /{path=**}/comentarios/{docId}{ allow read: if isApproved(); }
+
+    // Nota geral (base): docId = {avaliadorUid}_{alvoUid}; anonima, cada um escreve so a sua.
+    match /notasbase/{docId} {
+      allow read: if isApproved();
+      allow write: if isApproved() && docId.split('_')[0] == request.auth.uid;
+    }
+
+    // Colecao antiga de avaliacoes (leitura para migracao/historico).
+    match /avaliacoes/{docId} { allow read: if isApproved(); }
+
+    // Avulsos — lista de convidados sem login, gerida pelo Adm.
+    match /avulsos/{id} { allow read: if isApproved(); allow write: if isAdm(); }
+  }
+}

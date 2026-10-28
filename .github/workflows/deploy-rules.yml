@@ -1,0 +1,29 @@
+name: Publicar regras do Firestore
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - firestore.rules
+      - firebase.json
+      - .github/workflows/deploy-rules.yml
+  workflow_dispatch:
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Autenticar no Google
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$SA_JSON" || { echo "Secret FIREBASE_SERVICE_ACCOUNT nao configurado"; exit 1; }
+          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+      - name: Publicar firestore.rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+        run: npx -y firebase-tools@13 deploy --only firestore:rules --project fute-da-firma --non-interactive
