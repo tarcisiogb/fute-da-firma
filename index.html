@@ -272,7 +272,7 @@ var auth=null, db=null;
 if(FB){ try{ firebase.initializeApp(firebaseConfig); auth=firebase.auth(); db=firebase.firestore(); }catch(e){ FB=false; } }
 
 var POS = [["goleiro","Goleiro"],["zaga","Zaga"],["meio","Meio"],["ataque","Ataque"]];
-var BUILD = "2026-10-28b · só capitão anota; todos veem a súmula";
+var BUILD = "2026-10-28c · súmula só de presentes/times; lança a partir do dia do jogo";
 function posLabel(k){ for(var i=0;i<POS.length;i++){ if(POS[i][0]===k) return POS[i][1]; } return k||""; }
 var CATEG = [["quadra","Quadra"],["materiais","Materiais"],["celebracao","Celebração"],["outros","Outros"]];
 function catLabel(k){ for(var i=0;i<CATEG.length;i++){ if(CATEG[i][0]===k) return CATEG[i][1]; } return k; }
@@ -584,7 +584,8 @@ function logAudit(k,campo,id,de,para){ var u=me(); if(!u) return;
   var e={autor:u.id, autorNome:nomeExibTxt(u), papel:(u.role==="master"?"master":u.role==="adm"?"adm":"mensalista"), capitao:!!capitaoTime(k,u.id), alvo:id, alvoNome:nomeDe(k,id), campo:campo, de:de, para:para, tsCli:Date.now(), jogo:k};
   if(FB){ var o={}; for(var x in e) o[x]=e[x]; o.ts=firebase.firestore.FieldValue.serverTimestamp(); db.collection("jogos").doc(k).collection("auditoria").add(o).catch(fbCatch()); }
   else { (demoAudit[k]=demoAudit[k]||[]).push(e); } }
-function anotar(campo,id,delta){ var k=S.jogoSel; if(!k) return; if(!canScore(k)){ toast("Só o capitão (ou o Adm) pode lançar gols e assistências"); return; } if(edicaoBloqueada(k)) return;
+function jogoJaComecou(k){ return k<=ymd(new Date()); }
+function anotar(campo,id,delta){ var k=S.jogoSel; if(!k) return; if(!jogoJaComecou(k)){ toast("Só dá para lançar a partir do dia do jogo"); return; } if(!canScore(k)){ toast("Só o capitão (ou o Adm) pode lançar gols e assistências"); return; } if(edicaoBloqueada(k)) return;
   var de=(campo==="gol"?getGols(k,id):getAssist(k,id)), para=Math.max(0,de+delta); if(para===de) return;
   if(campo==="gol") setGols(k,id,para); else setAssist(k,id,para);
   logAudit(k,campo,id,de,para); render(); }
@@ -608,23 +609,24 @@ function renderAuditoria(k){ setTimeout(function(){ subAuditoria(k); },0);
   }
   h.push('</div>'); return h.join("");
 }
-function sumRow(k,id,nome,isAv,trav){ var cap=capitaoTime(k,id), ro=(trav||!canScore(k));
+function sumRow(k,id,nome,isAv,trav){ var cap=capitaoTime(k,id), ro=(trav||!canScore(k)||!jogoJaComecou(k));
   return '<div class="sumrow"><div class="sumname">'+esc(nome)+(cap?' <span class="badge mens">👑 Capitão</span>':'')+(isAv?' <span class="badge pos2">avulso</span>':'')+'</div><div class="sumsteps">'+(ro?statStatic(k,id):statStepper(k,id))+'</div></div>'; }
 function renderSumula(){
   var u=me(), k=(S.jogoManual&&S.jogoSel)?S.jogoSel:proximoJogoKey(); S.jogoSel=k;
-  var j=dbJogo(k), trav=jogoTravado(k), isProx=(k===proximoJogoKey()), cand={}, order=[], all=dbAllPlayers(), i, id;
+  var j=dbJogo(k), trav=jogoTravado(k), isProx=(k===proximoJogoKey()), cand={}, order=[], all=dbAllPlayers(), i, id, naTimes={};
+  if(j.times){ for(var tk in j.times){ (j.times[tk]||[]).forEach(function(g){ naTimes[g]=1; }); } }
   for(i=0;i<all.length;i++){ var p=all[i]; if(!(p.mensalista&&p.status==="aprovado"&&p.ativo)) continue; var pr=j.presenca[p.id], temStat=(j.gols[p.id]||j.assist[p.id]);
-    if(pr===true || (pr===undefined && j.confirm[p.id]==="sim") || temStat){ cand[p.id]={nome:nomeExibTxt(p),av:false}; order.push(p.id); } }
+    if(pr===true || (naTimes[p.id] && pr!==false) || temStat){ cand[p.id]={nome:nomeExibTxt(p),av:false}; order.push(p.id); } }
   for(i=0;i<j.avulsos.length;i++){ var b=j.avulsos[i]; cand[b.id]={nome:b.nome,av:true}; order.push(b.id); }
   order.sort(function(x,y){ return String(cand[x].nome).localeCompare(String(cand[y].nome),"pt-BR"); });
   var h=['<div class="panel"><div class="eyebrow">Súmula</div><h2 class="ph">Gols e assistências</h2>'];
   h.push('<div class="mesnav"><button class="btn mini ghost" data-action="jogo-prev" aria-label="Semana anterior">‹</button><div class="meslbl" style="text-transform:capitalize">'+esc(jogoLabel(k))+(isProx?' <span class="badge mens" style="vertical-align:middle;text-transform:none">próximo</span>':'')+'</div><button class="btn mini ghost" data-action="jogo-next" aria-label="Próxima semana">›</button></div>');
-  h.push('<div style="margin-top:8px">'+(trav?'<span class="badge" style="background:#fdecea;color:#c0392b">🔒 Travado — só leitura</span>':'<span class="badge mens">🔓 Aberto p/ lançamentos</span>')+'</div>');
+  h.push('<div style="margin-top:8px">'+(trav?'<span class="badge" style="background:#fdecea;color:#c0392b">🔒 Travado — só leitura</span>':(jogoJaComecou(k)?'<span class="badge mens">🔓 Aberto p/ lançamentos</span>':'<span class="badge" style="background:#fff3e0;color:#a9790b">⏳ Lançamentos a partir do dia do jogo</span>'))+'</div>');
   var podeLancar=canScore(k);
   var meT=capitaoTime(k,u.id);
   if(meT) h.push('<div style="margin-top:10px;padding:10px 12px;border-radius:12px;background:#e9f3ec;color:#166534;font-size:13px">👑 Você é o <b>capitão do Time '+esc(meT)+'</b> — a súmula oficial é sua. Só você (e o Adm) lança gols e assistências; cada lançamento fica registrado com o seu nome.</div>');
   else h.push('<div class="muted" style="font-size:12px;margin-top:10px">'+(podeLancar?'Você pode lançar como Adm. ':'')+'Quem lança é o capitão de cada time (👑). Todo mundo vê a súmula aqui para conferir; se algo estiver errado, fale com o capitão ou com um Adm.</div>');
-  if(!order.length){ h.push('<div class="emptymsg">Ninguém na lista ainda. Aparecem aqui os presentes (ou confirmados) e os avulsos do jogo.</div></div>'); return h.join(""); }
+  if(!order.length){ h.push('<div class="emptymsg">Ninguém na lista ainda. Aparecem aqui quem o Adm marcar como Presente, os avulsos e os times sorteados.</div></div>'); return h.join(""); }
   h.push('</div>');
   var placed={}, ts=j.times||null, keys=ts?Object.keys(ts).sort(function(a,b){ return parseInt(a,10)-parseInt(b,10); }):[], caps=j.capitaes||{};
   if(keys.length){
