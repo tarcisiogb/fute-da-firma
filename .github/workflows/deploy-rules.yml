@@ -26,4 +26,12 @@ jobs:
       - name: Publicar firestore.rules
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
-        run: npx -y firebase-tools@13 deploy --only firestore:rules --project fute-da-firma --non-interactive
+        run: |
+          set +e
+          npx -y firebase-tools@13 deploy --only firestore:rules --project fute-da-firma --non-interactive > "$RUNNER_TEMP/deploy.log" 2>&1
+          code=$?
+          cat "$RUNNER_TEMP/deploy.log"
+          if [ $code -ne 0 ]; then
+            echo "::error title=Falha ao publicar regras::$(grep -v '^$' "$RUNNER_TEMP/deploy.log" | tail -n 12 | tr '\n' ' ' | cut -c1-900)"
+          fi
+          exit $code
